@@ -102,13 +102,9 @@ measurement`, Home Assistant's long-term statistics keep history for
 them indefinitely (independent of the recorder purge interval), so
 History and Statistics graphs work without any extra setup.
 
-## Roadmap (not in v1)
+## Roadmap
 
-- A detailed run-by-run log (v1 only keeps the latest state per job,
-  like the sensors above - it relies on HA's own history/statistics
-  for trends, not a custom log store).
-- A bundled Lovelace dashboard/strategy summarizing all servers/jobs.
-- Automatic entity cleanup when a job hasn't reported in a long time.
+Planned/possible future work is tracked as [GitHub issues](https://github.com/andlo/ha-duplicati-monitor/issues) - see the `enhancement` and `new feature` labels.
 
 ## License
 
