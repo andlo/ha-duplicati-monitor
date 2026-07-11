@@ -1,6 +1,7 @@
 """Sensor platform for Duplicati Monitor."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -162,6 +163,46 @@ class DuplicatiJobSensor(DuplicatiJobEntity, SensorEntity):
         self.async_write_ha_state()
 
 
+class DuplicatiRawPayloadSensor(DuplicatiJobEntity, SensorEntity):
+    """Diagnostic sensor exposing the last raw incoming payload.
+
+    Useful for verifying/tuning the native-Duplicati-JSON field mapping
+    against your actual Duplicati version - see webhook.py.
+    """
+
+    _attr_translation_key = "raw_payload"
+    _attr_entity_category = "diagnostic"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, entry_id: str, report: JobReport) -> None:
+        super().__init__(entry_id, report)
+        self._attr_unique_id = f"{entry_id}_{report.server_id}_{report.job_id}_raw"
+        self._apply(report)
+
+    def _apply(self, report: JobReport) -> None:
+        self._report = report
+        self._attr_native_value = datetime.now(timezone.utc)
+        self._attr_extra_state_attributes = {
+            "source_payload": json.dumps(report.source_payload)[:4000]
+            if report.source_payload
+            else None,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        signal = SIGNAL_JOB_UPDATE.format(
+            entry_id=self._entry_id, server_id=self._server_id, job_id=self._job_id
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, signal, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, report: JobReport) -> None:
+        self._apply(report)
+        self.async_write_ha_state()
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -170,8 +211,11 @@ async def async_setup_entry(
 
     def _add_job(report: JobReport) -> None:
         async_add_entities(
-            DuplicatiJobSensor(entry.entry_id, report, description)
-            for description in SENSOR_TYPES
+            [
+                DuplicatiJobSensor(entry.entry_id, report, description)
+                for description in SENSOR_TYPES
+            ]
+            + [DuplicatiRawPayloadSensor(entry.entry_id, report)]
         )
 
     for report in store["jobs"].values():

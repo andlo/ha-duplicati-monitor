@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import CONF_WEBHOOK_ID, DOMAIN, PLATFORMS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
-from .webhook import JobReport, parse_payload
+from .webhook import JobReport, parse_incoming
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def _build_handler(entry_id: str):
             return web.Response(status=400, text="Invalid JSON")
 
         try:
-            report: JobReport = parse_payload(data)
+            report: JobReport = parse_incoming(data, request.query)
         except vol.Invalid as err:
             _LOGGER.warning("Rejected Duplicati payload: %s", err)
             return web.Response(status=400, text=f"Invalid payload: {err}")

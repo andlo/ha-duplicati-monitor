@@ -46,8 +46,45 @@ Nabu Casa Cloud webhook URL instead of a local address.
 
 ## Connecting a Duplicati job
 
-Duplicati does not send this integration's exact JSON shape natively,
-so a small translator script is provided in [`scripts/`](scripts/):
+There are two ways to feed Duplicati into this integration. **Option A
+needs no script at all** and is recommended.
+
+### Option A: Duplicati's built-in JSON reporting (recommended)
+
+Duplicati can POST its own JSON report directly - no script, no
+per-job setup. On each machine, open **Settings** (server-wide
+default options, so it applies to every job automatically - not a
+per-job option) and add:
+
+```
+--send-http-json-urls=https://YOUR_HA:8123/api/webhook/<your-webhook-id>?server_id=nas01&server_name=NAS01
+--send-http-level=All
+```
+
+- `server_id`/`server_name` in the query string identify this machine
+  as a device in Home Assistant (Duplicati's own payload doesn't
+  reliably include a stable machine id across setups, so we ask for it
+  explicitly here - set it once per machine).
+- `--send-http-level=All` makes sure successful backups are reported
+  too, not just failures.
+- The job name/id come from Duplicati's own payload automatically.
+
+The integration auto-detects Duplicati's native JSON shape and
+translates it. That translation is necessarily a best-effort mapping
+(Duplicati's JSON report isn't formally schema-documented and has
+shown minor differences across versions/community reports) - if a job
+comes through with missing fields, enable the job's normally-hidden
+**"Last raw payload" diagnostic sensor** (Settings > Devices & Services
+> Duplicati Monitor > the job's device > that entity, disabled by
+default) to see exactly what Duplicati sent, and open an issue/PR with
+what you find.
+
+### Option B: translator script (fallback / full control)
+
+If Option A doesn't fit your setup (very old Duplicati version, you
+want custom-computed fields, `--send-http-json-urls` misbehaving on
+your install - this has been reported by some users), a small
+translator script is provided in [`scripts/`](scripts/):
 
 - `duplicati-notify.sh` (Linux/macOS)
 - `duplicati-notify.ps1` (Windows)
@@ -64,10 +101,11 @@ environment variables available to Duplicati):
 | `DUPLICATI_SERVER_NAME` | Friendly device name | same as `DUPLICATI_SERVER_ID` |
 
 The script reads Duplicati's own `--run-script-after` result file
-(`$DUPLICATI__RESULTFILE`) and posts one JSON object per finished job.
-See [`docs/payload.md`](docs/payload.md) for the exact contract if you
-want to send it from something else (e.g. Node-RED, a different backup
-tool, or a custom script).
+(`$DUPLICATI__RESULTFILE`) and posts one JSON object per finished job,
+in this integration's own stable contract (see
+[`docs/payload.md`](docs/payload.md)) - unlike Option A, this bypasses
+native-JSON translation entirely, at the cost of needing the script
+installed per machine.
 
 ⚠️ The Duplicati environment variable that carries the backup job's
 name has varied across Duplicati versions. If jobs show up as
@@ -86,6 +124,9 @@ Per backup job, under a device named after `DUPLICATI_SERVER_NAME`:
 - `sensor.*_examined_files`, `*_added_files`, `*_modified_files`, `*_deleted_files`
 - `sensor.*_warnings`, `sensor.*_errors` (diagnostic category)
 - `binary_sensor.*_problem` - on when the last run ended in Error/Fatal
+- `sensor.*_last_raw_payload` (diagnostic, disabled by default) - the
+  most recent raw incoming payload, for verifying/debugging the native
+  JSON field mapping
 
 Because the size/duration/file-count sensors use `state_class:
 measurement`, Home Assistant's long-term statistics keep history for

@@ -26,7 +26,8 @@
       "modified_files": { "name": "Modified files" },
       "deleted_files": { "name": "Deleted files" },
       "warnings_count": { "name": "Warnings" },
-      "errors_count": { "name": "Errors" }
+      "errors_count": { "name": "Errors" },
+      "raw_payload": { "name": "Last raw payload" }
     },
     "binary_sensor": {
       "problem": { "name": "Problem" }
