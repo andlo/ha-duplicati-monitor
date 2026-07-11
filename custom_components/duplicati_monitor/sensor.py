@@ -16,7 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfInformation, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import DeviceInfo, Entity
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_WEBHOOK_ID, DOMAIN, PARSED_RESULTS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
@@ -205,7 +205,7 @@ class DuplicatiRawPayloadSensor(DuplicatiJobEntity, SensorEntity):
         self.async_write_ha_state()
 
 
-class DuplicatiWebhookInfoSensor(Entity, SensorEntity):
+class DuplicatiWebhookInfoSensor(SensorEntity):
     """Always-present sensor showing this collector's webhook URL.
 
     Lives on its own "hub" device (one per config entry), separate

@@ -30,3 +30,13 @@ jobs:
           python-version: "3.13"
       - run: pip install -r requirements-test.txt
       - run: pytest tests/ -v
+
+  smoke-test-ha:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install homeassistant
+      - run: PYTHONPATH=. python tests/smoke_test_ha.py
