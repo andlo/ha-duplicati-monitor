@@ -21,7 +21,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_WEBHOOK_ID, DOMAIN, PARSED_RESULTS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
 from .entity import DuplicatiJobEntity
-from .webhook import JobReport
+from .report import JobReport
 
 @dataclass(frozen=True, kw_only=True)
 class DuplicatiSensorDescription(SensorEntityDescription):

@@ -4,7 +4,7 @@ from __future__ import annotations
 from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from .const import DOMAIN
-from .webhook import JobReport
+from .report import JobReport
 
 
 class DuplicatiJobEntity(Entity):

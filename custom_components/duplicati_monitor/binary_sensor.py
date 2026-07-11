@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, PROBLEM_RESULTS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
 from .entity import DuplicatiJobEntity
-from .webhook import JobReport
+from .report import JobReport
 
 
 class DuplicatiProblemBinarySensor(DuplicatiJobEntity, BinarySensorEntity):

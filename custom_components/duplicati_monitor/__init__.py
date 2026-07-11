@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import CONF_WEBHOOK_ID, DOMAIN, PLATFORMS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
-from .webhook import JobReport, parse_incoming
+from .report import JobReport, parse_incoming
 
 _LOGGER = logging.getLogger(__name__)
 

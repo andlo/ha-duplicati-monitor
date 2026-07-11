@@ -9,7 +9,7 @@ sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "custom_components" / "duplicati_monitor")
 )
 
-from webhook import parse_incoming, parse_payload  # noqa: E402  (falls back to absolute import, see webhook.py)
+from report import parse_incoming, parse_payload  # noqa: E402  (falls back to absolute import, see report.py)
 
 
 def test_minimal_valid_payload():

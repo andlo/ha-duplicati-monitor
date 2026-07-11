@@ -1,10 +1,15 @@
-"""Webhook payload handling for Duplicati Monitor.
+"""Report payload parsing for Duplicati Monitor.
 
-Duplicati itself does not send exactly this JSON shape - the shipped
-scripts/duplicati-notify.sh (and .ps1) translate Duplicati's own
---run-script-after environment variables / result file into this
-stable contract, so the integration does not depend on Duplicati's
-internal report format.
+Handles both Duplicati's native --send-http-json-urls JSON and this
+integration's own internal contract (see docs/payload.md), auto-
+detecting which one arrived on the webhook.
+
+Named report.py (not webhook.py) deliberately: a submodule named
+webhook.py inside this package would shadow the `webhook` name bound
+via `from homeassistant.components import webhook` in __init__.py -
+Python rebinds a package attribute to the submodule as a side effect
+of `from .webhook import ...`, silently breaking that import. Keep it
+this way.
 """
 from __future__ import annotations
 
