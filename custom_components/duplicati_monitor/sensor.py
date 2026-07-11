@@ -11,13 +11,15 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
+from homeassistant.components import webhook as webhook_component
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfInformation, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity import DeviceInfo, Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, PARSED_RESULTS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
+from .const import CONF_WEBHOOK_ID, DOMAIN, PARSED_RESULTS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
 from .entity import DuplicatiJobEntity
 from .webhook import JobReport
 
@@ -203,11 +205,45 @@ class DuplicatiRawPayloadSensor(DuplicatiJobEntity, SensorEntity):
         self.async_write_ha_state()
 
 
+class DuplicatiWebhookInfoSensor(Entity, SensorEntity):
+    """Always-present sensor showing this collector's webhook URL.
+
+    Lives on its own "hub" device (one per config entry), separate
+    from the per-server devices created once jobs start reporting in.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_translation_key = "webhook_info"
+    _attr_entity_category = "diagnostic"
+    _attr_icon = "mdi:webhook"
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        self._entry = entry
+        webhook_id = entry.data[CONF_WEBHOOK_ID]
+        self._attr_unique_id = f"{entry.entry_id}_webhook_info"
+        self._attr_native_value = webhook_id
+        self._attr_extra_state_attributes = {
+            "webhook_url": webhook_component.async_generate_url(hass, webhook_id),
+        }
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name=self._entry.title,
+            manufacturer="Duplicati Monitor",
+            model="Collector",
+        )
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up sensors for existing jobs and listen for new ones."""
     store = hass.data[DOMAIN][entry.entry_id]
+
+    async_add_entities([DuplicatiWebhookInfoSensor(hass, entry)])
 
     def _add_job(report: JobReport) -> None:
         async_add_entities(

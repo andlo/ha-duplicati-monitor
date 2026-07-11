@@ -2,15 +2,17 @@
 
 The integration accepts two shapes on the same webhook URL, auto-detected:
 
-1. **Duplicati's native `--send-http-json-urls` JSON** (recommended,
-   see the main [README](../README.md#option-a-duplicatis-built-in-json-reporting-recommended))
-   - detected by the presence of a `Data` or `Extra` object - plus
+1. **Duplicati's native `--send-http-json-urls` JSON** (the supported,
+   documented way to connect Duplicati - see the main
+   [README](../README.md#connecting-a-duplicati-job)) - detected by the
+   presence of a `Data` or `Extra` object, plus
    `?server_id=...&server_name=...` on the URL for machine identification.
-2. **This integration's own stable contract**, documented below - used
-   by [`scripts/duplicati-notify.sh`](../scripts/duplicati-notify.sh)/`.ps1`,
-   and by anything else you want to wire up yourself (Node-RED, curl, etc).
+2. **This integration's own internal contract**, documented below. This
+   is what native payloads get translated into internally, and it's
+   also handy for manually testing the webhook with `curl` while
+   troubleshooting - see the example at the bottom.
 
-## Own contract format
+## Internal contract format
 
 POST JSON to the integration's webhook URL. `Content-Type: application/json`.
 

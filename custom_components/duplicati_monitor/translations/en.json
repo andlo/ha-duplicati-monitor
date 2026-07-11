@@ -3,13 +3,23 @@
     "step": {
       "user": {
         "title": "Set up Duplicati Monitor",
-        "description": "Creates a webhook endpoint that Duplicati jobs can POST their results to after each backup. You'll find the webhook URL under Settings > Automations & Scenes > Webhooks once this is created.",
-        "data": { "name": "Name" }
+        "description": "Choose a name and a webhook id. The webhook id becomes part of the URL Duplicati will send reports to - pick something short and recognisable (e.g. your Home Assistant instance name), or keep the suggestion. It must be unique among your Duplicati Monitor collectors.",
+        "data": { "name": "Name", "webhook_id": "Webhook ID" }
+      },
+      "confirm": {
+        "title": "Your webhook URL",
+        "description": "Use this URL in Duplicati's `--send-http-json-urls` option (as a server-wide default option, so it applies to every job automatically), with `?server_id=your-machine-name` appended:\n\n`{webhook_url}`\n\nYou can always find this again later on the integration's \"Webhook\" sensor.",
+        "data": {}
       },
       "reconfigure": {
         "title": "Rename Duplicati Monitor",
+        "description": "Your webhook URL stays the same:\n\n`{webhook_url}`",
         "data": { "name": "Name" }
       }
+    },
+    "error": {
+      "invalid_webhook_id": "Enter a webhook id (letters, numbers, hyphens).",
+      "webhook_id_taken": "That webhook id is already used by another Duplicati Monitor collector."
     },
     "abort": {
       "reconfigure_successful": "Reconfiguration was successful"
@@ -27,7 +37,8 @@
       "deleted_files": { "name": "Deleted files" },
       "warnings_count": { "name": "Warnings" },
       "errors_count": { "name": "Errors" },
-      "raw_payload": { "name": "Last raw payload" }
+      "raw_payload": { "name": "Last raw payload" },
+      "webhook_info": { "name": "Webhook" }
     },
     "binary_sensor": {
       "problem": { "name": "Problem" }
