@@ -1,0 +1,12 @@
+{
+  "domain": "duplicati_monitor",
+  "name": "Duplicati Monitor",
+  "codeowners": ["@andlo"],
+  "config_flow": true,
+  "documentation": "https://github.com/andlo/ha-duplicati-monitor",
+  "issue_tracker": "https://github.com/andlo/ha-duplicati-monitor/issues",
+  "iot_class": "local_push",
+  "integration_type": "hub",
+  "requirements": [],
+  "version": "0.1.0"
+}
