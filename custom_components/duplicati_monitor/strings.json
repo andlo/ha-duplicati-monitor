@@ -27,21 +27,21 @@
   },
   "entity": {
     "sensor": {
-      "status": { "name": "Status" },
-      "last_backup": { "name": "Last backup" },
-      "duration": { "name": "Duration" },
-      "backup_size": { "name": "Backup size" },
-      "examined_files": { "name": "Examined files" },
-      "added_files": { "name": "Added files" },
-      "modified_files": { "name": "Modified files" },
-      "deleted_files": { "name": "Deleted files" },
-      "warnings_count": { "name": "Warnings" },
-      "errors_count": { "name": "Errors" },
-      "raw_payload": { "name": "Last raw payload" },
+      "status": { "name": "{job_name} status" },
+      "last_backup": { "name": "{job_name} last backup" },
+      "duration": { "name": "{job_name} duration" },
+      "backup_size": { "name": "{job_name} backup size" },
+      "examined_files": { "name": "{job_name} examined files" },
+      "added_files": { "name": "{job_name} added files" },
+      "modified_files": { "name": "{job_name} modified files" },
+      "deleted_files": { "name": "{job_name} deleted files" },
+      "warnings_count": { "name": "{job_name} warnings" },
+      "errors_count": { "name": "{job_name} errors" },
+      "raw_payload": { "name": "{job_name} last raw payload" },
       "webhook_info": { "name": "Webhook" }
     },
     "binary_sensor": {
-      "problem": { "name": "Problem" }
+      "problem": { "name": "{job_name} problem" }
     }
   }
 }

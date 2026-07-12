@@ -16,7 +16,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfInformation, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
+from homeassistant.helpers.network import NoURLAvailableError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_WEBHOOK_ID, DOMAIN, PARSED_RESULTS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
@@ -102,7 +103,7 @@ SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
         translation_key="warnings_count",
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:alert-outline",
-        entity_category="diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda raw: raw.get("warnings_count", 0),
     ),
     DuplicatiSensorDescription(
@@ -110,7 +111,7 @@ SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
         translation_key="errors_count",
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:alert-circle-outline",
-        entity_category="diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda raw: raw.get("errors_count", 0),
     ),
 )
@@ -144,6 +145,7 @@ class DuplicatiJobSensor(DuplicatiJobEntity, SensorEntity):
             except ValueError:
                 value = None
         self._attr_native_value = value
+        self._attr_translation_placeholders = {"job_name": report.job_name}
         self._attr_extra_state_attributes = {
             "job_name": report.job_name,
             "job_id": report.job_id,
@@ -173,7 +175,7 @@ class DuplicatiRawPayloadSensor(DuplicatiJobEntity, SensorEntity):
     """
 
     _attr_translation_key = "raw_payload"
-    _attr_entity_category = "diagnostic"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_registry_enabled_default = False
 
@@ -185,6 +187,7 @@ class DuplicatiRawPayloadSensor(DuplicatiJobEntity, SensorEntity):
     def _apply(self, report: JobReport) -> None:
         self._report = report
         self._attr_native_value = datetime.now(timezone.utc)
+        self._attr_translation_placeholders = {"job_name": report.job_name}
         self._attr_extra_state_attributes = {
             "source_payload": json.dumps(report.source_payload)[:4000]
             if report.source_payload
@@ -215,17 +218,32 @@ class DuplicatiWebhookInfoSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "webhook_info"
-    _attr_entity_category = "diagnostic"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:webhook"
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    def __init__(self, entry: ConfigEntry) -> None:
         self._entry = entry
-        webhook_id = entry.data[CONF_WEBHOOK_ID]
+        self._webhook_id = entry.data[CONF_WEBHOOK_ID]
         self._attr_unique_id = f"{entry.entry_id}_webhook_info"
-        self._attr_native_value = webhook_id
-        self._attr_extra_state_attributes = {
-            "webhook_url": webhook_component.async_generate_url(hass, webhook_id),
-        }
+        self._attr_native_value = self._webhook_id
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Computed lazily so it reflects Settings > System > Network
+        even if that wasn't configured yet when this entity was created."""
+        return {"webhook_url": self._webhook_url()}
+
+    def _webhook_url(self) -> str:
+        try:
+            return webhook_component.async_generate_url(self.hass, self._webhook_id)
+        except NoURLAvailableError:
+            path = webhook_component.async_generate_path(self._webhook_id)
+            return (
+                f"{path} (Home Assistant doesn't have an internal/external "
+                "URL configured yet - set one under Settings > System > "
+                "Network to see the full address here; until then, prefix "
+                "this path with your own HA address)"
+            )
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -243,8 +261,9 @@ async def async_setup_entry(
     """Set up sensors for existing jobs and listen for new ones."""
     store = hass.data[DOMAIN][entry.entry_id]
 
-    async_add_entities([DuplicatiWebhookInfoSensor(hass, entry)])
+    async_add_entities([DuplicatiWebhookInfoSensor(entry)])
 
+    @callback
     def _add_job(report: JobReport) -> None:
         async_add_entities(
             [

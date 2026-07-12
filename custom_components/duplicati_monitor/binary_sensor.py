@@ -29,6 +29,7 @@ class DuplicatiProblemBinarySensor(DuplicatiJobEntity, BinarySensorEntity):
     def _apply(self, report: JobReport) -> None:
         self._report = report
         self._attr_is_on = report.raw.get("parsed_result") in PROBLEM_RESULTS
+        self._attr_translation_placeholders = {"job_name": report.job_name}
         self._attr_extra_state_attributes = {
             "job_name": report.job_name,
             "message": report.raw.get("message"),
@@ -54,6 +55,7 @@ async def async_setup_entry(
     """Set up problem binary sensors for existing jobs and listen for new ones."""
     store = hass.data[DOMAIN][entry.entry_id]
 
+    @callback
     def _add_job(report: JobReport) -> None:
         async_add_entities([DuplicatiProblemBinarySensor(entry.entry_id, report)])
 
