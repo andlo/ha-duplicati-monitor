@@ -182,3 +182,37 @@ def test_native_payload_backend_statistics_fields():
     assert report.raw["bytes_uploaded"] == 0
     assert report.raw["destination_free_space"] == 9717628928
     assert report.raw["log_lines"] == ["line one", "line two"]
+
+
+def test_dotnet_duration_parsed_from_native_json():
+    """Real bug (found 2026-07-12): Duplicati's Duration field is a
+    .NET TimeSpan string ("00:14:00.7046721"), not a plain number -
+    duration_seconds was never populated at all, showing 'Unknown'."""
+    from report import parse_dotnet_duration_seconds
+
+    assert parse_dotnet_duration_seconds("00:00:00.7046721") == pytest.approx(0.7046721)
+    assert parse_dotnet_duration_seconds("00:14:00") == 840.0
+    assert parse_dotnet_duration_seconds("1.05:30:00") == 86400 + 5 * 3600 + 30 * 60
+    assert parse_dotnet_duration_seconds(None) is None
+    assert parse_dotnet_duration_seconds("not a duration") is None
+
+    native = {
+        "Data": {
+            "ParsedResult": "Success",
+            "Duration": "00:14:00.7046721",
+        },
+        "Extra": {"backup-name": "TEST", "machine-name": "fedora"},
+    }
+    report = parse_incoming(native, {"server_id": "fedora"})
+    assert report.raw["duration_seconds"] == pytest.approx(840.7046721)
+
+
+def test_dotnet_duration_parsed_from_classic_message():
+    raw_body = (
+        "message=Duplicati%20Backup%20report%20for%20TEST%20"
+        "%28abc123%2C%20DB-1%2C%20fedora%29"
+        "%0A%0AExaminedFiles%3A%2010%0AParsedResult%3A%20Success"
+        "%0ADuration%3A%2000%3A14%3A00.7046721"
+    )
+    report = parse_raw_body(raw_body, {})
+    assert report.raw["duration_seconds"] == pytest.approx(840.7046721)

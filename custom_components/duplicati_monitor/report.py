@@ -190,6 +190,31 @@ def _dig(data: dict, *paths: tuple[str, ...]):
     return None
 
 
+_DOTNET_TIMESPAN_RE = re.compile(
+    r"^(?:(?P<days>\d+)\.)?(?P<hours>\d{1,2}):(?P<minutes>\d{2}):(?P<seconds>\d{2}(?:\.\d+)?)$"
+)
+
+
+def parse_dotnet_duration_seconds(value) -> float | None:
+    """Parse Duplicati's Duration field (.NET TimeSpan format, e.g.
+    "00:14:00.7046721" or "1.05:30:00" for 1 day/5h/30m) into seconds.
+
+    Duplicati reports Duration this way, not as a plain number - a
+    direct vol.Coerce(float) on it would raise, so both translators
+    must go through this first.
+    """
+    if not isinstance(value, str):
+        return None
+    match = _DOTNET_TIMESPAN_RE.match(value.strip())
+    if not match:
+        return None
+    days = int(match.group("days") or 0)
+    hours = int(match.group("hours"))
+    minutes = int(match.group("minutes"))
+    seconds = float(match.group("seconds"))
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds
+
+
 
 def is_native_duplicati_payload(data: dict) -> bool:
     """True if this looks like Duplicati's own --send-http-json-urls body."""
@@ -262,6 +287,9 @@ def translate_native_payload(data: dict, query: dict) -> dict:
         ATTR_PARSED_RESULT: parsed_result,
         ATTR_BEGIN_TIME: _dig(data, ("Data", "BeginTime"), ("BeginTime",)),
         ATTR_END_TIME: _dig(data, ("Data", "EndTime"), ("EndTime",)),
+        ATTR_DURATION_SECONDS: parse_dotnet_duration_seconds(
+            _dig(data, ("Data", "Duration"), ("Duration",))
+        ),
         ATTR_EXAMINED_FILES: _dig(data, ("Data", "ExaminedFiles"), ("ExaminedFiles",)) or 0,
         ATTR_ADDED_FILES: _dig(data, ("Data", "AddedFiles"), ("AddedFiles",)) or 0,
         ATTR_DELETED_FILES: _dig(data, ("Data", "DeletedFiles"), ("DeletedFiles",)) or 0,
@@ -403,6 +431,13 @@ def translate_classic_message(message: str, query: dict) -> dict:
         if not field_match:
             continue
         key, value = field_match.group(1), field_match.group(2).strip()
+        if key == "Duration":
+            # .NET TimeSpan format ("00:14:00.7046721") - not a plain
+            # number, needs its own conversion, unlike the other fields.
+            seconds = parse_dotnet_duration_seconds(value)
+            if seconds is not None:
+                contract[ATTR_DURATION_SECONDS] = seconds
+            continue
         contract_key = _CLASSIC_FIELD_MAP.get(key)
         if contract_key:
             contract[contract_key] = value
