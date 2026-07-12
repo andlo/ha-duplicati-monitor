@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers import device_registry as dr
 
 from .const import CONF_WEBHOOK_ID, DOMAIN, PLATFORMS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
 from .report import (
@@ -56,6 +57,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _build_handler(entry.entry_id),
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Run after platform setup, once entities have re-registered under
+    # their new (server, job) devices - otherwise this could remove a
+    # device that still has entities momentarily pointing at it,
+    # cascading into losing their registry entries (and entity_id/
+    # history continuity) before they get reassigned.
+    _async_remove_orphaned_devices(hass, entry, jobs)
+
     return True
 
 
@@ -71,6 +80,31 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Clean up persisted job data when the integration is removed."""
     await Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}").async_remove()
+
+
+def _async_remove_orphaned_devices(
+    hass: HomeAssistant, entry: ConfigEntry, jobs: dict
+) -> None:
+    """Remove devices that no longer match this entry's current model.
+
+    v0.1.0 switched from one device per server to one device per
+    (server, job) - this cleans up the old per-server devices (and any
+    other stale device) left behind by that change, or by jobs that
+    have since disappeared. Safe to run on every setup: it only ever
+    removes devices whose identifiers don't match a currently known
+    job or the collector hub device.
+    """
+    valid_identifiers = {(DOMAIN, entry.entry_id)}  # the "Webhook" hub device
+    for report in jobs.values():
+        valid_identifiers.add(
+            (DOMAIN, f"{entry.entry_id}_{report.server_id}_{report.job_id}")
+        )
+
+    device_registry = dr.async_get(hass)
+    for device in list(dr.async_entries_for_config_entry(device_registry, entry.entry_id)):
+        if not (device.identifiers & valid_identifiers):
+            _LOGGER.info("Removing orphaned device: %s", device.name)
+            device_registry.async_remove_device(device.id)
 
 
 def _build_handler(entry_id: str):

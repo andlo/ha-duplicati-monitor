@@ -7,17 +7,19 @@ job finishes - similar in spirit to
 self-hosted and push-based (no polling, no exposing Duplicati's own
 web UI to Home Assistant).
 
-Each backup server becomes a **device**, and each backup job on that
-server becomes a set of **entities** (status, last backup time,
-duration, size, file counts, warnings/errors, and a "problem" binary
-sensor) - all with proper `device_class`/`state_class`, so History and
-Statistics graphs work out of the box.
+Each backup job becomes a **device** (named `"{server} - {job}"`), with
+**entities** for status, last backup time, duration, size, versions,
+file counts, warnings/errors, and a "problem" binary sensor - all with
+proper `device_class`/`state_class`, so History and Statistics graphs
+work out of the box. If several jobs run on the same server, assign
+their devices to the same Home Assistant **Area** to keep them grouped
+by physical machine while still having a manageable device page per job.
 
 ## Status
 
-Early v1. Core webhook receiving, dynamic devices/entities per
-server+job, and the sensors above are implemented. Not yet included
-(see Roadmap): a detailed run-by-run log view and a bundled dashboard.
+v0.1.0. Core webhook receiving, dynamic per-job devices/entities, and
+the sensors above are implemented. Not yet included (see Roadmap): a
+detailed run-by-run log view and a bundled dashboard.
 
 ## Installation
 
@@ -93,7 +95,7 @@ One collector-level device (named after the integration entry) with:
   URL is in its `webhook_url` attribute - your permanent reference,
   no digging through Settings > Automations needed.
 
-Per backup job, under a device named after `server_name`:
+Per backup job, under its own device named `"{server_name} - {job_name}"`:
 
 - `sensor.*_status` - `Success` / `Warning` / `Error` / `Fatal` / `Unknown`
   (attribute `log_lines`: the last 50 log lines from that run, when

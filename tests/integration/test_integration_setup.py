@@ -199,3 +199,65 @@ async def test_jobs_survive_a_restart(hass, hass_client_no_auth):
         f"got {status_state.state!r} instead (this is the 'all entities "
         f"became unavailable' bug)"
     )
+
+
+async def test_one_device_per_job_and_orphan_cleanup(hass, hass_client_no_auth):
+    """v0.1.0 model change: one device per (server, job), not per
+    server. Also verifies old-style per-server devices left behind by
+    that change get cleaned up automatically."""
+    from homeassistant.helpers import device_registry as dr
+
+    assert await async_setup_component(hass, "http", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Duplicati",
+        data={CONF_WEBHOOK_ID: "duplicati-test6"},
+    )
+    entry.add_to_hass(hass)
+
+    device_registry = dr.async_get(hass)
+    stale_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_nas01")},
+        name="NAS01",
+    )
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    client = await hass_client_no_auth()
+    resp = await client.post(
+        "/api/webhook/duplicati-test6",
+        json={
+            "server_id": "nas01",
+            "server_name": "NAS01",
+            "job_id": "documents",
+            "job_name": "Documents",
+            "parsed_result": "Success",
+        },
+    )
+    assert resp.status == 200
+    await hass.async_block_till_done()
+
+    job_device = device_registry.async_get_device(
+        identifiers={(DOMAIN, f"{entry.entry_id}_nas01_documents")}
+    )
+    assert job_device is not None, "No per-(server, job) device was created"
+    assert job_device.name == "NAS01 - Documents"
+
+    # Setting up again (simulating a HA restart, with the job already
+    # persisted) should remove the stale per-server-only device.
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert device_registry.async_get(stale_device.id) is None, (
+        "Old-style per-server device was not cleaned up"
+    )
+    assert (
+        device_registry.async_get_device(
+            identifiers={(DOMAIN, f"{entry.entry_id}_nas01_documents")}
+        )
+        is not None
+    ), "Per-job device disappeared after restart"

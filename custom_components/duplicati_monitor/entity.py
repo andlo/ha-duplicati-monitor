@@ -21,10 +21,19 @@ class DuplicatiJobEntity(Entity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Group all jobs from the same server under one device."""
+        """One device per (server, job) - not per server.
+
+        v0.1.0 changed this from grouping all of a server's jobs under
+        one device: with several jobs per server that made a device
+        page an unsorted wall of entities. Job name is now part of the
+        device name, so entity names below stay short ("Status", not
+        "TEST status").
+        """
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._entry_id}_{self._server_id}")},
-            name=self._report.server_name,
+            identifiers={
+                (DOMAIN, f"{self._entry_id}_{self._server_id}_{self._job_id}")
+            },
+            name=f"{self._report.server_name} - {self._report.job_name}",
             manufacturer="Duplicati",
-            model="Backup server",
+            model="Backup job",
         )

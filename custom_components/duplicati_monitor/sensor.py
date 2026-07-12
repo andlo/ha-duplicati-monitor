@@ -186,7 +186,6 @@ class DuplicatiJobSensor(DuplicatiJobEntity, SensorEntity):
             except ValueError:
                 value = None
         self._attr_native_value = value
-        self._attr_translation_placeholders = {"job_name": report.job_name}
         attributes = {
             "job_name": report.job_name,
             "job_id": report.job_id,
@@ -237,7 +236,6 @@ class DuplicatiRawPayloadSensor(DuplicatiJobEntity, SensorEntity):
     def _apply(self, report: JobReport) -> None:
         self._report = report
         self._attr_native_value = datetime.now(timezone.utc)
-        self._attr_translation_placeholders = {"job_name": report.job_name}
         self._attr_extra_state_attributes = {
             "source_payload": json.dumps(report.source_payload, indent=2)[:4000]
             if report.source_payload
