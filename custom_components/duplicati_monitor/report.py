@@ -13,9 +13,12 @@ this way.
 """
 from __future__ import annotations
 
+import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from urllib.parse import parse_qs
 
 import voluptuous as vol
 
@@ -289,3 +292,136 @@ def parse_incoming(data: dict, query: dict | None = None) -> JobReport:
     report = parse_payload(contract)
     report.source_payload = data
     return report
+
+
+# ---------------------------------------------------------------------
+# Classic Duplicati "--send-http-url" plain-text report support
+#
+# This is Duplicati's older/default report format: a single
+# form-urlencoded "message" field whose value is a human-readable text
+# block, e.g.:
+#
+#   Duplicati Backup report for TEST (abc123, DB-1, myhostname)
+#
+#   DeletedFiles: 0
+#   ExaminedFiles: 276
+#   AddedFiles: 0
+#   ParsedResult: Success
+#   ...
+#
+# Confirmed against a real Duplicati instance on 2026-07-12 - this is
+# what most default/UI-configured Duplicati setups actually send,
+# distinct from the --send-http-json-urls JSON option above.
+# ---------------------------------------------------------------------
+
+_HEADER_RE = re.compile(
+    r"^Duplicati\s+(?P<operation>\S+)\s+report for\s+(?P<job_name>.+?)\s*\((?P<paren>[^)]*)\)"
+)
+_FIELD_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*):\s?(.*)$")
+
+_CLASSIC_FIELD_MAP = {
+    "ParsedResult": ATTR_PARSED_RESULT,
+    "BeginTime": ATTR_BEGIN_TIME,
+    "EndTime": ATTR_END_TIME,
+    "ExaminedFiles": ATTR_EXAMINED_FILES,
+    "AddedFiles": ATTR_ADDED_FILES,
+    "DeletedFiles": ATTR_DELETED_FILES,
+    "ModifiedFiles": ATTR_MODIFIED_FILES,
+    "SizeOfAddedFiles": ATTR_SIZE_ADDED,
+    "SizeOfModifiedFiles": ATTR_SIZE_MODIFIED,
+    "WarningsActualLength": ATTR_WARNINGS_COUNT,
+    "ErrorsActualLength": ATTR_ERRORS_COUNT,
+}
+
+
+def extract_classic_message(raw_body: str) -> str | None:
+    """If raw_body is form-urlencoded with a 'message' field, return its
+    (already URL-decoded) value. Otherwise return None."""
+    try:
+        parsed = parse_qs(raw_body, strict_parsing=True, errors="strict")
+    except ValueError:
+        return None
+    values = parsed.get("message")
+    if not values:
+        return None
+    return values[0]
+
+
+def translate_classic_message(message: str, query: dict) -> dict:
+    """Translate Duplicati's classic plain-text report into our contract."""
+    lines = message.splitlines()
+    contract: dict = {}
+
+    if lines:
+        match = _HEADER_RE.match(lines[0].strip())
+        if match:
+            contract[ATTR_OPERATION] = match.group("operation")
+            contract[ATTR_JOB_NAME] = match.group("job_name").strip()
+            paren_parts = [p.strip() for p in match.group("paren").split(",") if p.strip()]
+            if paren_parts:
+                # Last parenthesised part is conventionally the machine
+                # name, e.g. "(abc123, DB-1, myhostname)".
+                contract[ATTR_SERVER_NAME] = paren_parts[-1]
+
+    for line in lines[1:]:
+        field_match = _FIELD_RE.match(line.strip())
+        if not field_match:
+            continue
+        key, value = field_match.group(1), field_match.group(2).strip()
+        contract_key = _CLASSIC_FIELD_MAP.get(key)
+        if contract_key:
+            contract[contract_key] = value
+
+    contract[ATTR_MESSAGE] = message[:500]
+
+    server_id = query.get("server_id") or contract.get(ATTR_SERVER_NAME)
+    server_name = query.get("server_name") or contract.get(ATTR_SERVER_NAME) or server_id
+    job_id = query.get("job_id") or contract.get(ATTR_JOB_NAME)
+    job_name = query.get("job_name") or contract.get(ATTR_JOB_NAME) or job_id
+
+    if not server_id:
+        raise vol.Invalid(
+            "Could not determine server_id from the classic-format report. "
+            "Add ?server_id=your-machine-name to the report URL."
+        )
+
+    contract[ATTR_SERVER_ID] = server_id
+    contract[ATTR_SERVER_NAME] = server_name
+    contract[ATTR_JOB_ID] = job_id or "unknown"
+    contract[ATTR_JOB_NAME] = job_name or contract[ATTR_JOB_ID]
+
+    if contract.get(ATTR_PARSED_RESULT) not in PARSED_RESULTS:
+        contract[ATTR_PARSED_RESULT] = "Unknown"
+
+    return {k: v for k, v in contract.items() if v is not None}
+
+
+def parse_raw_body(raw_body: str, query: dict | None = None) -> JobReport:
+    """Parse a webhook request body of unknown shape.
+
+    Tries, in order: JSON (native Duplicati JSON or our own contract,
+    via parse_incoming), then Duplicati's classic form-urlencoded
+    plain-text report. Raises voluptuous.Invalid with a clear message
+    if neither matches.
+    """
+    query = dict(query or {})
+
+    try:
+        data = json.loads(raw_body)
+    except ValueError:
+        data = None
+
+    if data is not None:
+        return parse_incoming(data, query)
+
+    message = extract_classic_message(raw_body)
+    if message is not None:
+        contract = translate_classic_message(message, query)
+        report = parse_payload(contract)
+        report.source_payload = {"message": message}
+        return report
+
+    raise vol.Invalid(
+        "Payload is neither valid JSON nor Duplicati's classic "
+        "form-urlencoded report format."
+    )

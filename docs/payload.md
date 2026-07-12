@@ -1,16 +1,23 @@
 # Webhook payload contract
 
-The integration accepts two shapes on the same webhook URL, auto-detected:
+The integration accepts three shapes on the same webhook URL, auto-detected:
 
-1. **Duplicati's native `--send-http-json-urls` JSON** (the supported,
-   documented way to connect Duplicati - see the main
-   [README](../README.md#connecting-a-duplicati-job)) - detected by the
-   presence of a `Data` or `Extra` object, plus
-   `?server_id=...&server_name=...` on the URL for machine identification.
-2. **This integration's own internal contract**, documented below. This
-   is what native payloads get translated into internally, and it's
+1. **Duplicati's classic form-urlencoded plain-text report**
+   (`--send-http-url`) - a single `message` field containing a
+   human-readable text block (`ExaminedFiles: 276`, etc). This is what
+   most default/UI-configured Duplicati setups actually send -
+   confirmed against a real instance on 2026-07-12. See
+   `translate_classic_message()` in `report.py`.
+2. **Duplicati's native `--send-http-json-urls` JSON** - detected by
+   the presence of a `Data` or `Extra` object.
+3. **This integration's own internal contract**, documented below. This
+   is what the above two get translated into internally, and it's
    also handy for manually testing the webhook with `curl` while
    troubleshooting - see the example at the bottom.
+
+Both (1) and (2) accept `?server_id=...&server_name=...` on the URL
+for machine identification - see the main
+[README](../README.md#connecting-a-duplicati-job).
 
 ## Internal contract format
 

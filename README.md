@@ -48,33 +48,42 @@ Nabu Casa Cloud webhook URL instead of a local address.
 
 ## Connecting a Duplicati job
 
-Duplicati can POST its own JSON report directly to the webhook URL -
-no script, no per-job setup. On each machine, open **Settings**
+Duplicati can POST its own report directly to the webhook URL - no
+script, no per-job setup. On each machine, open **Settings**
 (server-wide default options, so it applies to every job on that
 machine automatically) and add:
 
 ```
---send-http-json-urls=https://YOUR_HA:8123/api/webhook/<your-webhook-id>?server_id=nas01&server_name=NAS01
+--send-http-url=http://YOUR_HA:8123/api/webhook/<your-webhook-id>?server_id=nas01&server_name=NAS01
 --send-http-level=All
 ```
 
+(Use `--send-http-json-urls` instead of `--send-http-url` if you
+prefer - both are auto-detected and handled, see below. Match the
+scheme, `http://` vs `https://`, to whatever your Home Assistant's
+port actually serves; a scheme mismatch will fail silently from
+Duplicati's side with no error in Home Assistant's logs at all, since
+the request never arrives.)
+
 - `server_id`/`server_name` in the query string identify this machine
-  as a device in Home Assistant (Duplicati's own payload doesn't
+  as a device in Home Assistant (Duplicati's own report doesn't
   reliably include a stable machine id across setups, so we ask for it
   explicitly here - set it once per machine, keep `server_id` stable
-  once chosen).
+  once chosen). If omitted, the integration falls back to the machine
+  name Duplicati embeds in its own report header, when present.
 - `--send-http-level=All` makes sure successful backups are reported
   too, not just failures.
-- The job name/id come from Duplicati's own payload automatically.
+- The job name/id come from Duplicati's own report automatically.
 
-The integration auto-detects Duplicati's native JSON shape and
-translates it. That translation is necessarily a best-effort mapping
-(Duplicati's JSON report isn't formally schema-documented and has
-shown minor differences across versions/community reports) - if a job
-comes through with missing fields, enable the job's normally-hidden
-**"Last raw payload" diagnostic sensor** (on that job's device,
-disabled by default) to see exactly what Duplicati sent, and open an
-issue/PR with what you find.
+**Two different wire formats, both handled automatically:** depending
+on your Duplicati version/option, it may send either its classic
+form-urlencoded plain-text report (a `message=...` field containing
+human-readable text like `ExaminedFiles: 276`) or an actual JSON body.
+The integration detects and parses both - you don't need to know or
+care which one you're getting. If a job comes through with missing
+fields, enable the job's normally-hidden **"Last raw payload"
+diagnostic sensor** (on that job's device, disabled by default) to see
+exactly what Duplicati sent, and open an issue/PR with what you find.
 
 ## What you get
 

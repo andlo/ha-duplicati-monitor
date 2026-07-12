@@ -9,7 +9,7 @@ sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "custom_components" / "duplicati_monitor")
 )
 
-from report import parse_incoming, parse_payload  # noqa: E402  (falls back to absolute import, see report.py)
+from report import parse_incoming, parse_payload, parse_raw_body  # noqa: E402  (falls back to absolute import, see report.py)
 
 
 def test_minimal_valid_payload():
@@ -101,3 +101,44 @@ def test_contract_payload_still_works_via_dispatch():
     report = parse_incoming({"server_id": "nas01", "job_id": "documents"}, {})
     assert report.server_id == "nas01"
     assert report.job_id == "documents"
+
+
+def test_classic_message_format_real_world_sample():
+    """Real payload captured from a live Duplicati instance on 2026-07-12:
+    Duplicati's default report is form-urlencoded 'message=...', NOT
+    JSON, even when a JSON-looking option is configured. This is the
+    exact shape parse_raw_body must handle."""
+    raw_body = (
+        "message=Duplicati%20Backup%20report%20for%20TEST%20"
+        "%28de061ef940dc4e2d98e397383be75bb8%2C%20DB-1%2C%20fedora%29"
+        "%0A%0ADeletedFiles%3A%200%0ADeletedFolders%3A%200"
+        "%0AModifiedFiles%3A%200%0AExaminedFiles%3A%20276"
+        "%0AOpenedFiles%3A%200%0AAddedFiles%3A%200"
+        "%0ASizeOfModifiedFiles%3A%200%0ASizeOfAddedFiles%3A%200"
+        "%0AParsedResult%3A%20Success"
+    )
+    report = parse_raw_body(raw_body, {"server_id": "fedora", "server_name": "Fedora"})
+    assert report.server_id == "fedora"
+    assert report.server_name == "Fedora"
+    assert report.job_id == "TEST"
+    assert report.raw["parsed_result"] == "Success"
+    assert report.raw["examined_files"] == 276
+
+
+def test_classic_message_format_server_id_from_message_when_no_query():
+    """Without a ?server_id= override, fall back to the machine name
+    embedded in the message header's last parenthesised part."""
+    raw_body = (
+        "message=Duplicati%20Backup%20report%20for%20TEST%20"
+        "%28abc123%2C%20DB-1%2C%20myhostname%29"
+        "%0A%0AExaminedFiles%3A%2010%0AParsedResult%3A%20Warning"
+    )
+    report = parse_raw_body(raw_body, {})
+    assert report.server_id == "myhostname"
+    assert report.job_id == "TEST"
+    assert report.raw["parsed_result"] == "Warning"
+
+
+def test_unparseable_body_raises():
+    with pytest.raises(vol.Invalid):
+        parse_raw_body("this is neither json nor form data {{{", {})
