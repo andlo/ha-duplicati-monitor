@@ -91,6 +91,7 @@ SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
         translation_key="backup_size",
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIBIBYTES,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_fn=_size_bytes,
@@ -144,6 +145,7 @@ SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
         translation_key="total_backup_size",
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIBIBYTES,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:database",
@@ -161,6 +163,7 @@ SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
         translation_key="uploaded_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIBIBYTES,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:cloud-upload-outline",
@@ -172,6 +175,7 @@ SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
         translation_key="destination_free_space",
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIBIBYTES,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:harddisk",
@@ -374,7 +378,7 @@ class DuplicatiSummarySensor(SensorEntity):
     editing - see docs/dashboard.yaml.
     """
 
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
     _attr_should_poll = False
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -420,6 +424,58 @@ class DuplicatiSummarySensor(SensorEntity):
         self.async_write_ha_state()
 
 
+class DuplicatiOkPercentSensor(SensorEntity):
+    """Percentage of known jobs currently OK (0-100) - meant to drive
+    a native `gauge` dashboard card as a donut-like "health ring",
+    closer to duplicati-monitoring.com's overview without adding
+    another HACS card. See docs/dashboard.yaml.
+    """
+
+    _attr_has_entity_name = False
+    _attr_should_poll = False
+    _attr_native_unit_of_measurement = "%"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:percent-circle"
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_summary_jobs_ok_percent"
+        self._attr_name = "Duplicati Health %"
+        self._apply()
+
+    def _apply(self) -> None:
+        jobs = self.hass.data[DOMAIN][self._entry.entry_id]["jobs"] if self.hass else {}
+        if not jobs:
+            self._attr_native_value = 100
+            return
+        ok = sum(1 for r in jobs.values() if r.raw.get("parsed_result") == "Success")
+        self._attr_native_value = round(100 * ok / len(jobs))
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name=self._entry.title,
+            manufacturer="Duplicati Monitor",
+            model="Collector",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        self._apply()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_ANY_UPDATE.format(entry_id=self._entry.entry_id),
+                self._handle_update,
+            )
+        )
+
+    @callback
+    def _handle_update(self) -> None:
+        self._apply()
+        self.async_write_ha_state()
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -430,22 +486,23 @@ async def async_setup_entry(
         [
             DuplicatiWebhookInfoSensor(entry),
             DuplicatiSummarySensor(
-                entry, "jobs_total", "Jobs total", "mdi:counter", lambda raw: True
+                entry, "jobs_total", "Duplicati Total", "mdi:counter", lambda raw: True
             ),
             DuplicatiSummarySensor(
                 entry,
                 "jobs_ok",
-                "Jobs OK",
+                "Duplicati OK",
                 "mdi:check-circle",
                 lambda raw: raw.get("parsed_result") == "Success",
             ),
             DuplicatiSummarySensor(
                 entry,
                 "jobs_problem",
-                "Jobs problem",
+                "Duplicati Problem",
                 "mdi:alert-circle",
                 lambda raw: raw.get("parsed_result") in PROBLEM_RESULTS,
             ),
+            DuplicatiOkPercentSensor(entry),
         ]
     )
 

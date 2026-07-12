@@ -4,13 +4,13 @@
 # Uses only built-in Home Assistant cards, plus one HACS card
 # (`auto-entities`).
 #
-# IMPORTANT LESSON FROM A REAL BUG: an earlier version of this file
-# hardcoded entity IDs like `sensor.duplicati_jobs_total`, assuming
-# the collector device is named "Duplicati" - but that name is
-# whatever you typed during setup (e.g. "Duplicati Monitor"), which
-# changes the actual entity ID prefix. Every card below now filters by
-# `integration: duplicati_monitor` (the fixed domain, never changes)
-# instead of guessing entity IDs from a device name.
+# The four "Duplicati Total/OK/Problem/Health" summary entities always
+# have the same entity_id regardless of what you named the integration
+# during setup (see sensor.py - they deliberately opt out of the usual
+# device-name prefix), so they're referenced directly below. Every
+# per-job card still filters by `integration: duplicati_monitor`
+# rather than guessing entity IDs, since job entities DO still inherit
+# your collector's device name.
 #
 # How to use:
 # 1. Install "auto-entities" via HACS > Frontend (search "auto-entities").
@@ -29,20 +29,32 @@ views:
     path: duplicati
     icon: mdi:backup-restore
     cards:
-      # --- Summary numbers ---
-      - type: custom:auto-entities
-        card:
-          type: glance
-          title: Summary
-          show_state: true
-        filter:
-          include:
-            - integration: duplicati_monitor
-              entity_id: "*_jobs_total"
-            - integration: duplicati_monitor
-              entity_id: "*_jobs_ok"
-            - integration: duplicati_monitor
-              entity_id: "*_jobs_problem"
+      # --- Summary: health gauge + counts ---
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.duplicati_health
+            name: Backup health
+            min: 0
+            max: 100
+            severity:
+              green: 80
+              yellow: 50
+              red: 0
+
+          - type: glance
+            title: Jobs
+            show_state: true
+            entities:
+              - entity: sensor.duplicati_total
+                name: Total
+                icon: mdi:counter
+              - entity: sensor.duplicati_ok
+                name: OK
+                icon: mdi:check-circle
+              - entity: sensor.duplicati_problem
+                name: Problem
+                icon: mdi:alert-circle
 
       # --- One row per job ---
       - type: custom:auto-entities
@@ -84,7 +96,8 @@ views:
       # by your collector's device name, so this never needs updating
       # as you add/rename jobs). Each job's "History" diagnostic
       # sensor must be enabled first (Settings > that job's device >
-      # History > gear icon) or it won't show up here.
+      # History > gear icon) or it won't show up here. Timestamps are
+      # converted to your local timezone and shortened for readability.
       - type: markdown
         title: Recent runs, per job
         content: |
@@ -103,7 +116,9 @@ views:
           | When | Result | Files | Warnings | Errors |
           |---|---|---|---|---|
           {%- for run in runs | reverse -%}
-          {{ "\n" }}| {{ run.end_time or run.recorded_at }} | {{ run.parsed_result }} | {{ run.examined_files }} | {{ run.warnings_count }} | {{ run.errors_count }} |
+          {%- set ts = run.end_time or run.recorded_at -%}
+          {%- set when = as_local(as_datetime(ts)).strftime('%Y-%m-%d %H:%M') if ts else 'unknown' -%}
+          {{ "\n" }}| {{ when }} | {{ run.parsed_result }} | {{ run.examined_files }} | {{ run.warnings_count }} | {{ run.errors_count }} |
           {%- endfor %}
           {%- endif %}
           {%- endfor %}

@@ -349,14 +349,14 @@ async def test_summary_sensors_count_jobs_by_status(hass, hass_client_no_auth):
     await post("nas02", "backup", "Success")
     await hass.async_block_till_done()
 
-    assert hass.states.get("sensor.duplicati_jobs_total").state == "3"
-    assert hass.states.get("sensor.duplicati_jobs_ok").state == "2"
-    assert hass.states.get("sensor.duplicati_jobs_problem").state == "1"
+    assert hass.states.get("sensor.duplicati_total").state == "3"
+    assert hass.states.get("sensor.duplicati_ok").state == "2"
+    assert hass.states.get("sensor.duplicati_problem").state == "1"
 
     # A job flipping from Success to Fatal should update the counts live.
     await post("nas02", "backup", "Fatal")
     await hass.async_block_till_done()
 
-    assert hass.states.get("sensor.duplicati_jobs_total").state == "3"
-    assert hass.states.get("sensor.duplicati_jobs_ok").state == "1"
-    assert hass.states.get("sensor.duplicati_jobs_problem").state == "2"
+    assert hass.states.get("sensor.duplicati_total").state == "3"
+    assert hass.states.get("sensor.duplicati_ok").state == "1"
+    assert hass.states.get("sensor.duplicati_problem").state == "2"

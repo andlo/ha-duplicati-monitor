@@ -94,10 +94,11 @@ One collector-level device (named after the integration entry) with:
 - `sensor.*_webhook` (diagnostic) - state is your webhook id, the full
   URL is in its `webhook_url` attribute - your permanent reference,
   no digging through Settings > Automations needed.
-- `sensor.*_jobs_total`, `sensor.*_jobs_ok`, `sensor.*_jobs_problem` -
-  live counts across every currently known job, for zero-config
-  dashboard summary tiles (see below) - no per-job setup needed, these
-  recompute automatically as jobs report in.
+- `sensor.duplicati_total`, `sensor.duplicati_ok`, `sensor.duplicati_problem`,
+  `sensor.duplicati_health` (0-100%) - live counts/health across every
+  currently known job, for zero-config dashboard summary tiles (see
+  below). These have fixed entity IDs regardless of what you name the
+  integration, so a dashboard can reference them directly.
 
 Per backup job, under its own device named `"{server_name} - {job_name}"`:
 
@@ -107,7 +108,10 @@ Per backup job, under its own device named `"{server_name} - {job_name}"`:
   the classic plain-text format)
 - `sensor.*_last_backup` - timestamp of the last completed run
 - `sensor.*_duration` - seconds
-- `sensor.*_backup_size` - bytes added/modified this run
+- `sensor.*_backup_size` - added/modified this run (displays in GiB by
+  default; size sensors use Home Assistant's built-in unit conversion,
+  so you can switch to MB/TB etc. per-entity under Settings if you
+  prefer - Settings > that entity > gear icon > Unit of measurement)
 - `sensor.*_total_backup_size` - total size of everything currently
   stored at the destination (all versions combined)
 - `sensor.*_versions` - number of backup versions currently retained
