@@ -94,6 +94,10 @@ One collector-level device (named after the integration entry) with:
 - `sensor.*_webhook` (diagnostic) - state is your webhook id, the full
   URL is in its `webhook_url` attribute - your permanent reference,
   no digging through Settings > Automations needed.
+- `sensor.*_jobs_total`, `sensor.*_jobs_ok`, `sensor.*_jobs_problem` -
+  live counts across every currently known job, for zero-config
+  dashboard summary tiles (see below) - no per-job setup needed, these
+  recompute automatically as jobs report in.
 
 Per backup job, under its own device named `"{server_name} - {job_name}"`:
 

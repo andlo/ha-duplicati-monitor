@@ -1,28 +1,44 @@
 # Example dashboard for Duplicati Monitor
 #
 # Uses only built-in Home Assistant cards, plus one HACS card
-# (`auto-entities`) for the overview - no custom Duplicati-specific
-# frontend code to build or maintain.
+# (`auto-entities`) - no custom Duplicati-specific frontend code to
+# build or maintain, and no additional unverified HACS cards (a
+# fancier unified table is possible with e.g. `flex-table-card`, but
+# its multi-entity row-joining behaviour isn't something I could
+# verify without a live HA instance to test against, and this file has
+# already shipped a couple of untested mistakes - sticking to cards
+# with confirmed, predictable behaviour this time).
 #
-# STRUCTURE: an "Overview" tab listing every job's status, plus one
-# extra tab PER JOB with that job's trend graphs and a log table -
-# clicking between tabs at the top of the dashboard IS the "drill
-# down" (no click-through wiring needed, that's what HA's own view
-# tabs already do). Copy the "Fedora - TEST" view block below once per
-# job you want a detail tab for, and swap in that job's entity IDs.
-#
-# Every card filters by `integration: duplicati_monitor`, not by
+# EVERY card filters by `integration: duplicati_monitor`, not by
 # entity_id wildcards - a wildcard like "sensor.*_status" also matches
 # unrelated entities from other integrations that happen to end in
-# "_status" (very common: device trackers, Z-Wave nodes, cameras...).
+# "_status" (device trackers, Z-Wave nodes, cameras...).
+#
+# STRUCTURE:
+# - "Overview" tab: summary tiles (jobs total/OK/problem), a status
+#   list, a size list, and a combined activity log - all fully
+#   generic, zero per-job editing, works for any number of jobs.
+# - One detail tab per job (optional, for the log table) - or just use
+#   Home Assistant's own built-in device page instead (see below),
+#   which needs ZERO dashboard configuration at all.
+#
+# THE EASIEST "DRILL DOWN": Settings > Devices & Services > Duplicati
+# Monitor > click any job's device. Home Assistant auto-generates that
+# page with every sensor, its history graph, and current value - for
+# every job, automatically, with no dashboard editing whatsoever. This
+# is the generic equivalent of duplicati-monitoring.com's "Backup Set"
+# detail page. Clicking any entity anywhere also opens a similar
+# more-info dialog with History + Attributes (including the full raw
+# payload, if you've enabled that diagnostic sensor).
 #
 # How to use:
 # 1. Install "auto-entities" via HACS > Frontend (search "auto-entities").
 # 2. Settings > Dashboards > Add Dashboard > "New dashboard from scratch",
 #    or edit an existing one. Switch to YAML mode (⋮ menu > Edit in YAML)
 #    and paste everything below.
-# 3. For each job's detail tab, replace `sensor.fedora_test_*` with that
-#    job's own entity IDs, and duplicate the view block.
+# 3. (Optional) for a per-job log table, replace `sensor.fedora_test_*`
+#    in the second view with your own job's entity IDs, and duplicate
+#    that view once per job you want a dedicated log tab for.
 
 title: Duplicati
 views:
@@ -30,13 +46,27 @@ views:
     path: duplicati-overview
     icon: mdi:backup-restore
     cards:
-      # One row per job: icon (color-coded by result), name, state.
-      # Click a row to open HA's built-in more-info dialog (history +
-      # attributes, including log_lines) - works with zero extra config.
+      - type: horizontal-stack
+        cards:
+          - type: tile
+            entity: sensor.duplicati_jobs_total
+            name: Jobs
+            icon: mdi:counter
+          - type: tile
+            entity: sensor.duplicati_jobs_ok
+            name: OK
+            icon: mdi:check-circle
+            color: green
+          - type: tile
+            entity: sensor.duplicati_jobs_problem
+            name: Problem
+            icon: mdi:alert-circle
+            color: red
+
       - type: custom:auto-entities
         card:
           type: entities
-          title: Backup jobs
+          title: Backup jobs - status
         filter:
           include:
             - integration: duplicati_monitor
@@ -44,7 +74,30 @@ views:
         sort:
           method: friendly_name
 
-  # --- Detail tab for ONE job - duplicate this whole view per job ---
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: Backup jobs - total size stored
+        filter:
+          include:
+            - integration: duplicati_monitor
+              entity_id: "*_total_backup_size"
+        sort:
+          method: friendly_name
+
+      - type: custom:auto-entities
+        card:
+          type: logbook
+          title: Recent activity (all jobs)
+          hours_to_show: 168
+        filter:
+          include:
+            - integration: duplicati_monitor
+              entity_id: "*_status"
+
+  # --- Optional: detail tab for ONE job, with a proper log table.
+  # Duplicate this view per job, or just use the device page instead
+  # (see the note at the top of this file) and skip this entirely. ---
   - title: Fedora - TEST
     path: duplicati-fedora-test
     icon: mdi:server

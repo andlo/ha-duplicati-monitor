@@ -20,7 +20,15 @@ from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.network import NoURLAvailableError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_WEBHOOK_ID, DOMAIN, PARSED_RESULTS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
+from .const import (
+    CONF_WEBHOOK_ID,
+    DOMAIN,
+    PARSED_RESULTS,
+    PROBLEM_RESULTS,
+    SIGNAL_ANY_UPDATE,
+    SIGNAL_JOB_UPDATE,
+    SIGNAL_NEW_JOB,
+)
 from .entity import DuplicatiJobEntity
 from .report import JobReport
 
@@ -358,13 +366,88 @@ class DuplicatiWebhookInfoSensor(SensorEntity):
         )
 
 
+class DuplicatiSummarySensor(SensorEntity):
+    """Aggregate count across all currently known jobs on this
+    collector (e.g. "how many are OK right now") - lives on the hub
+    device, recomputed on every webhook call. Meant to drive simple
+    "X of Y" style dashboard tiles without any per-job dashboard
+    editing - see docs/dashboard.yaml.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, entry: ConfigEntry, key: str, name: str, icon: str, predicate
+    ) -> None:
+        self._entry = entry
+        self._key = key
+        self._predicate = predicate
+        self._attr_unique_id = f"{entry.entry_id}_summary_{key}"
+        self._attr_name = name
+        self._attr_icon = icon
+        self._apply()
+
+    def _apply(self) -> None:
+        jobs = self.hass.data[DOMAIN][self._entry.entry_id]["jobs"] if self.hass else {}
+        self._attr_native_value = sum(
+            1 for report in jobs.values() if self._predicate(report.raw)
+        )
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name=self._entry.title,
+            manufacturer="Duplicati Monitor",
+            model="Collector",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        self._apply()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                SIGNAL_ANY_UPDATE.format(entry_id=self._entry.entry_id),
+                self._handle_update,
+            )
+        )
+
+    @callback
+    def _handle_update(self) -> None:
+        self._apply()
+        self.async_write_ha_state()
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up sensors for existing jobs and listen for new ones."""
     store = hass.data[DOMAIN][entry.entry_id]
 
-    async_add_entities([DuplicatiWebhookInfoSensor(entry)])
+    async_add_entities(
+        [
+            DuplicatiWebhookInfoSensor(entry),
+            DuplicatiSummarySensor(
+                entry, "jobs_total", "Jobs total", "mdi:counter", lambda raw: True
+            ),
+            DuplicatiSummarySensor(
+                entry,
+                "jobs_ok",
+                "Jobs OK",
+                "mdi:check-circle",
+                lambda raw: raw.get("parsed_result") == "Success",
+            ),
+            DuplicatiSummarySensor(
+                entry,
+                "jobs_problem",
+                "Jobs problem",
+                "mdi:alert-circle",
+                lambda raw: raw.get("parsed_result") in PROBLEM_RESULTS,
+            ),
+        ]
+    )
 
     @callback
     def _add_job(report: JobReport) -> None:

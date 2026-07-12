@@ -15,6 +15,11 @@ SIGNAL_NEW_JOB = f"{DOMAIN}_new_job_{{entry_id}}"
 # Entities listen for this using their own (server_id, job_id) suffix.
 SIGNAL_JOB_UPDATE = f"{DOMAIN}_job_update_{{entry_id}}_{{server_id}}_{{job_id}}"
 
+# Signal dispatched after EVERY webhook update, regardless of which job
+# - for entry-level aggregate sensors (job counts) that need to
+# recompute across all known jobs, not just one.
+SIGNAL_ANY_UPDATE = f"{DOMAIN}_any_update_{{entry_id}}"
+
 PARSED_RESULTS = ["Success", "Warning", "Error", "Fatal", "Unknown"]
 PROBLEM_RESULTS = {"Error", "Fatal"}
 

@@ -17,6 +17,7 @@ from .const import (
     DOMAIN,
     MAX_HISTORY_ENTRIES,
     PLATFORMS,
+    SIGNAL_ANY_UPDATE,
     SIGNAL_JOB_UPDATE,
     SIGNAL_NEW_JOB,
 )
@@ -192,6 +193,7 @@ def _build_handler(entry_id: str):
                 ),
                 report,
             )
+        async_dispatcher_send(hass, SIGNAL_ANY_UPDATE.format(entry_id=entry_id))
 
         return web.Response(status=200, text="OK")
 

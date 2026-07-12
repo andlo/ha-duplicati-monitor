@@ -316,3 +316,47 @@ async def test_run_history_accumulates_trims_and_survives_restart(
     assert len(history_state.attributes["runs"]) == MAX_HISTORY_ENTRIES, (
         "Run history did not survive a restart"
     )
+
+
+async def test_summary_sensors_count_jobs_by_status(hass, hass_client_no_auth):
+    """Entry-level 'X of Y' sensors, for zero-config dashboard tiles -
+    should recompute live as jobs report in with different results."""
+    assert await async_setup_component(hass, "http", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Duplicati",
+        data={CONF_WEBHOOK_ID: "duplicati-test8"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    client = await hass_client_no_auth()
+
+    async def post(server_id, job_id, result):
+        resp = await client.post(
+            "/api/webhook/duplicati-test8",
+            json={
+                "server_id": server_id,
+                "job_id": job_id,
+                "parsed_result": result,
+            },
+        )
+        assert resp.status == 200
+
+    await post("nas01", "documents", "Success")
+    await post("nas01", "photos", "Fatal")
+    await post("nas02", "backup", "Success")
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.duplicati_jobs_total").state == "3"
+    assert hass.states.get("sensor.duplicati_jobs_ok").state == "2"
+    assert hass.states.get("sensor.duplicati_jobs_problem").state == "1"
+
+    # A job flipping from Success to Fatal should update the counts live.
+    await post("nas02", "backup", "Fatal")
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.duplicati_jobs_total").state == "3"
+    assert hass.states.get("sensor.duplicati_jobs_ok").state == "1"
+    assert hass.states.get("sensor.duplicati_jobs_problem").state == "2"
