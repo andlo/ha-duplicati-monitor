@@ -90,36 +90,34 @@ views:
             - integration: duplicati_monitor
               entity_id: "*_status"
 
-      # --- Per-job run log, ALL jobs, no editing needed ever ---
-      # Loops over every "_history" sensor this integration has
-      # created (integration_entities() looks them up by domain, not
-      # by your collector's device name, so this never needs updating
-      # as you add/rename jobs). Each job's "History" diagnostic
-      # sensor must be enabled first (Settings > that job's device >
-      # History > gear icon) or it won't show up here. Timestamps are
-      # converted to your local timezone and shortened for readability.
+      # --- Recent runs, ALL jobs combined into one table ---
+      # Merges every job's history into one list sorted newest-first,
+      # capped at 25 rows total (not per job) - stays readable no
+      # matter how many jobs you have or how much history piles up.
+      # Each job's "History" diagnostic sensor must be enabled first
+      # (Settings > that job's device > History > gear icon) or its
+      # runs won't show up here. Timestamps are shown in your local
+      # timezone.
       - type: markdown
-        title: Recent runs, per job
+        title: Recent runs (all jobs)
         content: |
           {%- set history_entities = integration_entities('duplicati_monitor') | select('match', '.*_history$') | list -%}
-          {%- if history_entities | length == 0 %}
-          No "History" sensors are enabled yet - enable at least one job's
-          History sensor under Settings > that job's device > History.
+          {%- set all_runs = namespace(list=[]) -%}
+          {%- for entity_id in history_entities -%}
+          {%- for run in (state_attr(entity_id, 'runs') or []) -%}
+          {%- set all_runs.list = all_runs.list + [run] -%}
+          {%- endfor -%}
+          {%- endfor -%}
+          {%- set sorted_runs = all_runs.list | sort(attribute='recorded_at', reverse=true) -%}
+          {%- if sorted_runs | length == 0 %}
+          No runs recorded yet - enable at least one job's History
+          sensor under Settings > that job's device > History.
           {%- else %}
-          {%- for entity_id in history_entities %}
-
-          ### {{ state_attr(entity_id, 'friendly_name') or entity_id }}
-          {%- set runs = state_attr(entity_id, 'runs') or [] %}
-          {%- if runs | length == 0 %}
-          No runs recorded yet.
-          {%- else %}
-          | When | Result | Files | Warnings | Errors |
-          |---|---|---|---|---|
-          {%- for run in runs | reverse -%}
+          | Server | Job | When | Result | Files | Warnings | Errors |
+          |---|---|---|---|---|---|---|
+          {%- for run in sorted_runs[:25] -%}
           {%- set ts = run.end_time or run.recorded_at -%}
           {%- set when = as_local(as_datetime(ts)).strftime('%Y-%m-%d %H:%M') if ts else 'unknown' -%}
-          {{ "\n" }}| {{ when }} | {{ run.parsed_result }} | {{ run.examined_files }} | {{ run.warnings_count }} | {{ run.errors_count }} |
-          {%- endfor %}
-          {%- endif %}
+          {{ "\n" }}| {{ run.server_name or run.server_id or "?" }} | {{ run.job_name or run.job_id or "?" }} | {{ when }} | {{ run.parsed_result }} | {{ run.examined_files }} | {{ run.warnings_count }} | {{ run.errors_count }} |
           {%- endfor %}
           {%- endif %}

@@ -49,8 +49,8 @@ async def test_dashboard_per_job_markdown_template_renders_correctly(
     rendered = tpl.async_render()
 
     assert "documents" in rendered.lower() or "Duplicati Monitor" in rendered
-    assert "| When | Result | Files | Warnings | Errors |" in rendered
-    assert "|---|---|---|---|---|" in rendered
+    assert "| Server | Job | When | Result | Files | Warnings | Errors |" in rendered
+    assert "|---|---|---|---|---|---|---|" in rendered
     assert "Fatal" in rendered
     assert "Success" in rendered
 
@@ -59,7 +59,7 @@ async def test_dashboard_per_job_markdown_template_renders_correctly(
     # renderer will only render the header as a table and dump the
     # data rows as raw text - exactly the bug reported twice already.
     lines = [l for l in rendered.splitlines() if l.strip()]
-    header_idx = next(i for i, l in enumerate(lines) if l.startswith("| When"))
+    header_idx = next(i for i, l in enumerate(lines) if l.startswith("| Server"))
     assert lines[header_idx + 1].startswith("|---"), (
         "Separator row must immediately follow the header row"
     )

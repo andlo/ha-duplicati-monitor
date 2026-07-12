@@ -539,6 +539,10 @@ def report_to_history_entry(report: JobReport) -> dict:
     message = raw.get("message")
     return {
         "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "server_id": report.server_id,
+        "server_name": report.server_name,
+        "job_id": report.job_id,
+        "job_name": report.job_name,
         "parsed_result": raw.get("parsed_result"),
         "begin_time": raw.get("begin_time"),
         "end_time": raw.get("end_time"),
