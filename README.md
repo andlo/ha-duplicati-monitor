@@ -137,12 +137,21 @@ Everything else works with either format.
 
 ## Dashboard
 
-[`docs/dashboard.yaml`](docs/dashboard.yaml) is a ready-to-paste
-dashboard: an overview (one row per job, via the `auto-entities` HACS
-card), a size-over-time graph, and a per-job log view built from the
-`history` sensor above using a `markdown` card - no custom frontend
+[`docs/dashboard.yaml`](docs/dashboard.yaml) is a ready-to-paste,
+single-view dashboard - summary tiles, a job status list, a combined
+size graph, an activity log, and a per-job run log - built entirely
+from built-in cards plus the `auto-entities` HACS card. Every card
+filters by `integration: duplicati_monitor` (not entity-ID guessing),
+and the per-job log section auto-discovers every job's "History"
+sensor via Home Assistant's `integration_entities()`, so it never
+needs editing as you add, rename, or remove jobs. No custom frontend
 code, so no separate build/maintenance track. See the comments at the
 top of that file for setup steps.
+
+The easiest "drill down" into one job's full detail is Home
+Assistant's own device page (Settings > Devices & Services > click any
+job) - it's auto-generated with every sensor, graph, and current
+value, for every job, with zero dashboard configuration.
 
 Because the size/duration/file-count sensors use `state_class:
 measurement`, Home Assistant's long-term statistics keep history for

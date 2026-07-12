@@ -1,68 +1,50 @@
 # Example dashboard for Duplicati Monitor
 #
+# Fully generic - zero per-job or per-installation editing needed.
 # Uses only built-in Home Assistant cards, plus one HACS card
-# (`auto-entities`) - no custom Duplicati-specific frontend code to
-# build or maintain, and no additional unverified HACS cards (a
-# fancier unified table is possible with e.g. `flex-table-card`, but
-# its multi-entity row-joining behaviour isn't something I could
-# verify without a live HA instance to test against, and this file has
-# already shipped a couple of untested mistakes - sticking to cards
-# with confirmed, predictable behaviour this time).
+# (`auto-entities`).
 #
-# EVERY card filters by `integration: duplicati_monitor`, not by
-# entity_id wildcards - a wildcard like "sensor.*_status" also matches
-# unrelated entities from other integrations that happen to end in
-# "_status" (device trackers, Z-Wave nodes, cameras...).
-#
-# STRUCTURE:
-# - "Overview" tab: summary tiles (jobs total/OK/problem), a status
-#   list, a size list, and a combined activity log - all fully
-#   generic, zero per-job editing, works for any number of jobs.
-# - One detail tab per job (optional, for the log table) - or just use
-#   Home Assistant's own built-in device page instead (see below),
-#   which needs ZERO dashboard configuration at all.
-#
-# THE EASIEST "DRILL DOWN": Settings > Devices & Services > Duplicati
-# Monitor > click any job's device. Home Assistant auto-generates that
-# page with every sensor, its history graph, and current value - for
-# every job, automatically, with no dashboard editing whatsoever. This
-# is the generic equivalent of duplicati-monitoring.com's "Backup Set"
-# detail page. Clicking any entity anywhere also opens a similar
-# more-info dialog with History + Attributes (including the full raw
-# payload, if you've enabled that diagnostic sensor).
+# IMPORTANT LESSON FROM A REAL BUG: an earlier version of this file
+# hardcoded entity IDs like `sensor.duplicati_jobs_total`, assuming
+# the collector device is named "Duplicati" - but that name is
+# whatever you typed during setup (e.g. "Duplicati Monitor"), which
+# changes the actual entity ID prefix. Every card below now filters by
+# `integration: duplicati_monitor` (the fixed domain, never changes)
+# instead of guessing entity IDs from a device name.
 #
 # How to use:
 # 1. Install "auto-entities" via HACS > Frontend (search "auto-entities").
 # 2. Settings > Dashboards > Add Dashboard > "New dashboard from scratch",
 #    or edit an existing one. Switch to YAML mode (⋮ menu > Edit in YAML)
-#    and paste everything below.
-# 3. (Optional) for a per-job log table, replace `sensor.fedora_test_*`
-#    in the second view with your own job's entity IDs, and duplicate
-#    that view once per job you want a dedicated log tab for.
+#    and paste everything below. One view, nothing to customise.
+#
+# THE EASIEST DRILL-DOWN: Settings > Devices & Services > Duplicati
+# Monitor > click any job's device. Home Assistant auto-generates that
+# page with every sensor, its history graph, and current value - for
+# every job, automatically, with no dashboard editing at all.
 
 title: Duplicati
 views:
-  - title: Overview
-    path: duplicati-overview
+  - title: Duplicati
+    path: duplicati
     icon: mdi:backup-restore
     cards:
-      - type: horizontal-stack
-        cards:
-          - type: tile
-            entity: sensor.duplicati_jobs_total
-            name: Jobs
-            icon: mdi:counter
-          - type: tile
-            entity: sensor.duplicati_jobs_ok
-            name: OK
-            icon: mdi:check-circle
-            color: green
-          - type: tile
-            entity: sensor.duplicati_jobs_problem
-            name: Problem
-            icon: mdi:alert-circle
-            color: red
+      # --- Summary numbers ---
+      - type: custom:auto-entities
+        card:
+          type: glance
+          title: Summary
+          show_state: true
+        filter:
+          include:
+            - integration: duplicati_monitor
+              entity_id: "*_jobs_total"
+            - integration: duplicati_monitor
+              entity_id: "*_jobs_ok"
+            - integration: duplicati_monitor
+              entity_id: "*_jobs_problem"
 
+      # --- One row per job ---
       - type: custom:auto-entities
         card:
           type: entities
@@ -74,17 +56,18 @@ views:
         sort:
           method: friendly_name
 
+      # --- Every job's total size, on one graph ---
       - type: custom:auto-entities
         card:
-          type: entities
-          title: Backup jobs - total size stored
+          type: history-graph
+          title: Total backup size over time
+          hours_to_show: 168
         filter:
           include:
             - integration: duplicati_monitor
               entity_id: "*_total_backup_size"
-        sort:
-          method: friendly_name
 
+      # --- Combined activity log, all jobs ---
       - type: custom:auto-entities
         card:
           type: logbook
@@ -95,34 +78,33 @@ views:
             - integration: duplicati_monitor
               entity_id: "*_status"
 
-  # --- Optional: detail tab for ONE job, with a proper log table.
-  # Duplicate this view per job, or just use the device page instead
-  # (see the note at the top of this file) and skip this entirely. ---
-  - title: Fedora - TEST
-    path: duplicati-fedora-test
-    icon: mdi:server
-    cards:
-      - type: custom:auto-entities
-        card:
-          type: history-graph
-          title: Total backup size over time
-          hours_to_show: 168
-        filter:
-          include:
-            - integration: duplicati_monitor
-              entity_id: "sensor.fedora_test_total_backup_size"
-
+      # --- Per-job run log, ALL jobs, no editing needed ever ---
+      # Loops over every "_history" sensor this integration has
+      # created (integration_entities() looks them up by domain, not
+      # by your collector's device name, so this never needs updating
+      # as you add/rename jobs). Each job's "History" diagnostic
+      # sensor must be enabled first (Settings > that job's device >
+      # History > gear icon) or it won't show up here.
       - type: markdown
-        title: Recent runs
+        title: Recent runs, per job
         content: |
-          {%- set runs = state_attr('sensor.fedora_test_history', 'runs') or [] -%}
+          {%- set history_entities = integration_entities('duplicati_monitor') | select('match', '.*_history$') | list -%}
+          {%- if history_entities | length == 0 %}
+          No "History" sensors are enabled yet - enable at least one job's
+          History sensor under Settings > that job's device > History.
+          {%- else %}
+          {%- for entity_id in history_entities %}
+
+          ### {{ state_attr(entity_id, 'friendly_name') or entity_id }}
+          {%- set runs = state_attr(entity_id, 'runs') or [] %}
           {%- if runs | length == 0 %}
-          No runs recorded yet - enable the "History" diagnostic sensor
-          for this job first (Settings > this device > History > gear icon).
+          No runs recorded yet.
           {%- else %}
           | When | Result | Files | Warnings | Errors |
           |---|---|---|---|---|
           {%- for run in runs | reverse -%}
           {{ "\n" }}| {{ run.end_time or run.recorded_at }} | {{ run.parsed_result }} | {{ run.examined_files }} | {{ run.warnings_count }} | {{ run.errors_count }} |
+          {%- endfor %}
+          {%- endif %}
           {%- endfor %}
           {%- endif %}
