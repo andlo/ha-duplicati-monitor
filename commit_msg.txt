@@ -1,0 +1,31 @@
+Fix "Recent runs" dashboard card rendering blank on a real dashboard
+
+Two compounding causes found by testing directly against andlo's live
+Home Assistant instance via its template-eval API:
+
+1. Home Assistant's own dashboard YAML editor re-serialises pasted
+   config and rewrites `content: |` (literal block) to `content: >`
+   (folded block) - collapsing every line break into a single space
+   before Jinja ever runs. This happened even though the file itself
+   uses `|`; nothing we control. Rewrote the template so every
+   newline needed in the *output* is emitted explicitly via
+   {{ "\n" }}, rather than depending on a source-level line break
+   surviving - verified by manually folding the template (joining all
+   lines with spaces) and confirming byte-identical rendered output.
+
+2. Separately, and more fundamental: history entries recorded before
+   v0.3.3 don't have server_name/job_name/server_id/job_id at all.
+   Accessing a missing dict key via Jinja dot-notation (run.server_name)
+   *raises* inside the for-loop rather than rendering blank, which
+   silently broke the entire card for anyone with any pre-existing
+   history - exactly andlo's case. Switched to run.get(key, default)
+   throughout.
+
+Confirmed the fix directly against the live instance's real data via
+Home Assistant's template-eval API before shipping, and added two
+regression tests: one that folds the template's own source and checks
+identical output, one that injects an old-style history entry missing
+the newer fields and asserts no exception.
+
+No custom_components/ changes - dashboard/test-only fix, no new
+release needed for the integration itself.

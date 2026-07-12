@@ -98,26 +98,36 @@ views:
       # (Settings > that job's device > History > gear icon) or its
       # runs won't show up here. Timestamps are shown in your local
       # timezone.
+      #
+      # Written to survive Home Assistant's own dashboard editor
+      # re-serialising this YAML (it rewrites `content: |` to
+      # `content: >`, which folds line breaks into spaces before Jinja
+      # ever runs) - every newline needed in the *output* is emitted
+      # explicitly via {{ "\n" }} rather than relying on a source line
+      # break surviving, and `run.get(...)` is used throughout instead
+      # of `run.xxx` so older history entries (recorded before a field
+      # existed) don't raise instead of just showing blank/"?".
       - type: markdown
         title: Recent runs (all jobs)
-        content: |
-          {%- set history_entities = integration_entities('duplicati_monitor') | select('match', '.*_history$') | list -%}
+        content: >
+          {%- set history_entities = integration_entities('duplicati_monitor')
+          | select('match', '.*_history$') | list -%}
           {%- set all_runs = namespace(list=[]) -%}
           {%- for entity_id in history_entities -%}
           {%- for run in (state_attr(entity_id, 'runs') or []) -%}
           {%- set all_runs.list = all_runs.list + [run] -%}
           {%- endfor -%}
           {%- endfor -%}
-          {%- set sorted_runs = all_runs.list | sort(attribute='recorded_at', reverse=true) -%}
-          {%- if sorted_runs | length == 0 %}
-          No runs recorded yet - enable at least one job's History
-          sensor under Settings > that job's device > History.
-          {%- else %}
-          | Server | Job | When | Result | Files | Warnings | Errors |
-          |---|---|---|---|---|---|---|
-          {%- for run in sorted_runs[:25] -%}
-          {%- set ts = run.end_time or run.recorded_at -%}
-          {%- set when = as_local(as_datetime(ts)).strftime('%Y-%m-%d %H:%M') if ts else 'unknown' -%}
-          {{ "\n" }}| {{ run.server_name or run.server_id or "?" }} | {{ run.job_name or run.job_id or "?" }} | {{ when }} | {{ run.parsed_result }} | {{ run.examined_files }} | {{ run.warnings_count }} | {{ run.errors_count }} |
-          {%- endfor %}
-          {%- endif %}
+          {%- set sorted_runs = all_runs.list | sort(attribute='recorded_at',
+          reverse=true) -%}
+          {%- if sorted_runs | length == 0 -%}
+          No runs recorded yet - enable at least one job's History sensor
+          under Settings > that job's device > History.
+          {%- else -%}
+          {{ "| Server | Job | When | Result | Files | Warnings | Errors |" }}{{ "\n" }}{{ "|---|---|---|---|---|---|---|" }}{%- for run in sorted_runs[:25] -%}
+          {%- set ts = run.get('end_time') or run.get('recorded_at') -%}
+          {%- set when = as_local(as_datetime(ts)).strftime('%Y-%m-%d %H:%M')
+          if ts else 'unknown' -%}
+          {{ "\n" }}| {{ run.get('server_name') or run.get('server_id') or "?" }} | {{ run.get('job_name') or run.get('job_id') or "?" }} | {{ when }} | {{ run.get('parsed_result') }} | {{ run.get('examined_files') }} | {{ run.get('warnings_count') }} | {{ run.get('errors_count') }} |
+          {%- endfor -%}
+          {%- endif -%}
