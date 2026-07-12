@@ -37,6 +37,10 @@
       "deleted_files": { "name": "{job_name} deleted files" },
       "warnings_count": { "name": "{job_name} warnings" },
       "errors_count": { "name": "{job_name} errors" },
+      "total_backup_size": { "name": "{job_name} total backup size" },
+      "versions": { "name": "{job_name} versions" },
+      "uploaded_bytes": { "name": "{job_name} uploaded" },
+      "destination_free_space": { "name": "{job_name} destination free space" },
       "raw_payload": { "name": "{job_name} last raw payload" },
       "webhook_info": { "name": "Webhook" }
     },

@@ -142,3 +142,43 @@ def test_classic_message_format_server_id_from_message_when_no_query():
 def test_unparseable_body_raises():
     with pytest.raises(vol.Invalid):
         parse_raw_body("this is neither json nor form data {{{", {})
+
+
+def test_native_payload_backend_statistics_fields():
+    """Real native-JSON payload captured from andlo's live Duplicati
+    instance on 2026-07-12 (--send-http-json-urls), trimmed to the
+    fields that matter for this test. Confirms extraction of the
+    BackendStatistics block: total size, version count, upload bytes,
+    free destination space, and log lines."""
+    native = {
+        "Data": {
+            "ExaminedFiles": 276,
+            "ParsedResult": "Success",
+            "WarningsActualLength": 0,
+            "ErrorsActualLength": 0,
+            "LogLines": ["line one", "line two"],
+            "BackendStatistics": {
+                "BytesUploaded": 0,
+                "KnownFileCount": 6,
+                "KnownFileSize": 50579180,
+                "KnownFilesets": 2,
+                "FreeQuotaSpace": 9717628928,
+            },
+        },
+        "Extra": {
+            "backup-name": "TEST",
+            "backup-id": "DB-1",
+            "machine-id": "de061ef940dc4e2d98e397383be75bb8",
+            "machine-name": "fedora",
+        },
+    }
+    report = parse_incoming(native, {})
+    assert report.server_id == "de061ef940dc4e2d98e397383be75bb8"
+    assert report.server_name == "fedora"
+    assert report.job_id == "DB-1"
+    assert report.job_name == "TEST"
+    assert report.raw["total_size"] == 50579180
+    assert report.raw["versions"] == 2
+    assert report.raw["bytes_uploaded"] == 0
+    assert report.raw["destination_free_space"] == 9717628928
+    assert report.raw["log_lines"] == ["line one", "line two"]

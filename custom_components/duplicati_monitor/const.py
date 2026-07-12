@@ -41,5 +41,13 @@ ATTR_WARNINGS_COUNT = "warnings_count"
 ATTR_ERRORS_COUNT = "errors_count"
 ATTR_MESSAGE = "message"
 
+# From Duplicati's BackendStatistics block - what's actually stored at
+# the destination, not just what changed in this run.
+ATTR_TOTAL_SIZE = "total_size"
+ATTR_VERSIONS = "versions"
+ATTR_BYTES_UPLOADED = "bytes_uploaded"
+ATTR_QUOTA_FREE = "destination_free_space"
+ATTR_LOG_LINES = "log_lines"
+
 # How long a job may go without a fresh AFTER-event before we consider
 # it "stale" is intentionally NOT handled in v1 - see README roadmap.

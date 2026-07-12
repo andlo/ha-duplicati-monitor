@@ -29,6 +29,7 @@ class DuplicatiSensorDescription(SensorEntityDescription):
     """Describes one Duplicati job sensor and how to read its value."""
 
     value_fn: callable = lambda raw: None
+    include_log: bool = False
 
 
 def _size_bytes(raw: dict) -> int | None:
@@ -46,6 +47,7 @@ SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=PARSED_RESULTS,
         value_fn=lambda raw: raw.get("parsed_result"),
+        include_log=True,
     ),
     DuplicatiSensorDescription(
         key="last_backup",
@@ -114,6 +116,45 @@ SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda raw: raw.get("errors_count", 0),
     ),
+    DuplicatiSensorDescription(
+        key="total_backup_size",
+        translation_key="total_backup_size",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:database",
+        value_fn=lambda raw: raw.get("total_size"),
+    ),
+    DuplicatiSensorDescription(
+        key="versions",
+        translation_key="versions",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:file-multiple-outline",
+        value_fn=lambda raw: raw.get("versions"),
+    ),
+    DuplicatiSensorDescription(
+        key="uploaded_bytes",
+        translation_key="uploaded_bytes",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:cloud-upload-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda raw: raw.get("bytes_uploaded"),
+    ),
+    DuplicatiSensorDescription(
+        key="destination_free_space",
+        translation_key="destination_free_space",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        icon="mdi:harddisk",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda raw: raw.get("destination_free_space"),
+    ),
 )
 
 class DuplicatiJobSensor(DuplicatiJobEntity, SensorEntity):
@@ -146,11 +187,16 @@ class DuplicatiJobSensor(DuplicatiJobEntity, SensorEntity):
                 value = None
         self._attr_native_value = value
         self._attr_translation_placeholders = {"job_name": report.job_name}
-        self._attr_extra_state_attributes = {
+        attributes = {
             "job_name": report.job_name,
             "job_id": report.job_id,
             "server_id": report.server_id,
         }
+        if self.entity_description.include_log:
+            log_lines = report.raw.get("log_lines")
+            if isinstance(log_lines, list):
+                attributes["log_lines"] = log_lines[-50:]
+        self._attr_extra_state_attributes = attributes
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to updates for this specific job."""
@@ -171,7 +217,11 @@ class DuplicatiRawPayloadSensor(DuplicatiJobEntity, SensorEntity):
     """Diagnostic sensor exposing the last raw incoming payload.
 
     Useful for verifying/tuning the native-Duplicati-JSON field mapping
-    against your actual Duplicati version - see webhook.py.
+    against your actual Duplicati version - see report.py. Disabled by
+    default; enable it via Settings > Devices & Services > the job's
+    device > this entity > the gear icon. View its content via the
+    entity's "Attributes" section in its more-info dialog, or
+    Developer Tools > States.
     """
 
     _attr_translation_key = "raw_payload"
@@ -189,7 +239,7 @@ class DuplicatiRawPayloadSensor(DuplicatiJobEntity, SensorEntity):
         self._attr_native_value = datetime.now(timezone.utc)
         self._attr_translation_placeholders = {"job_name": report.job_name}
         self._attr_extra_state_attributes = {
-            "source_payload": json.dumps(report.source_payload)[:4000]
+            "source_payload": json.dumps(report.source_payload, indent=2)[:4000]
             if report.source_payload
             else None,
         }

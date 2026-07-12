@@ -26,6 +26,7 @@ try:
     from .const import (
         ATTR_ADDED_FILES,
         ATTR_BEGIN_TIME,
+        ATTR_BYTES_UPLOADED,
         ATTR_DELETED_FILES,
         ATTR_DURATION_SECONDS,
         ATTR_END_TIME,
@@ -34,14 +35,18 @@ try:
         ATTR_EXAMINED_FILES,
         ATTR_JOB_ID,
         ATTR_JOB_NAME,
+        ATTR_LOG_LINES,
         ATTR_MESSAGE,
         ATTR_MODIFIED_FILES,
         ATTR_OPERATION,
         ATTR_PARSED_RESULT,
+        ATTR_QUOTA_FREE,
         ATTR_SERVER_ID,
         ATTR_SERVER_NAME,
         ATTR_SIZE_ADDED,
         ATTR_SIZE_MODIFIED,
+        ATTR_TOTAL_SIZE,
+        ATTR_VERSIONS,
         ATTR_WARNINGS_COUNT,
         EVENT_AFTER,
         PARSED_RESULTS,
@@ -52,6 +57,7 @@ except ImportError:
     from const import (
     ATTR_ADDED_FILES,
     ATTR_BEGIN_TIME,
+    ATTR_BYTES_UPLOADED,
     ATTR_DELETED_FILES,
     ATTR_DURATION_SECONDS,
     ATTR_END_TIME,
@@ -60,14 +66,18 @@ except ImportError:
     ATTR_EXAMINED_FILES,
     ATTR_JOB_ID,
     ATTR_JOB_NAME,
+    ATTR_LOG_LINES,
     ATTR_MESSAGE,
     ATTR_MODIFIED_FILES,
     ATTR_OPERATION,
     ATTR_PARSED_RESULT,
+    ATTR_QUOTA_FREE,
     ATTR_SERVER_ID,
     ATTR_SERVER_NAME,
     ATTR_SIZE_ADDED,
     ATTR_SIZE_MODIFIED,
+    ATTR_TOTAL_SIZE,
+    ATTR_VERSIONS,
     ATTR_WARNINGS_COUNT,
     EVENT_AFTER,
     PARSED_RESULTS,
@@ -98,6 +108,11 @@ PAYLOAD_SCHEMA = vol.Schema(
         vol.Optional(ATTR_WARNINGS_COUNT, default=0): vol.Coerce(int),
         vol.Optional(ATTR_ERRORS_COUNT, default=0): vol.Coerce(int),
         vol.Optional(ATTR_MESSAGE): str,
+        vol.Optional(ATTR_TOTAL_SIZE): vol.Coerce(int),
+        vol.Optional(ATTR_VERSIONS): vol.Coerce(int),
+        vol.Optional(ATTR_BYTES_UPLOADED): vol.Coerce(int),
+        vol.Optional(ATTR_QUOTA_FREE): vol.Coerce(int),
+        vol.Optional(ATTR_LOG_LINES): list,
     },
     extra=vol.ALLOW_EXTRA,
 )
@@ -267,6 +282,19 @@ def translate_native_payload(data: dict, query: dict) -> dict:
             (("Data", "Errors"), ("Errors",)),
         ),
         ATTR_MESSAGE: _dig(data, ("message",), ("Extra", "message")),
+        ATTR_TOTAL_SIZE: _dig(
+            data, ("Data", "BackendStatistics", "KnownFileSize")
+        ),
+        ATTR_VERSIONS: _dig(
+            data, ("Data", "BackendStatistics", "KnownFilesets")
+        ),
+        ATTR_BYTES_UPLOADED: _dig(
+            data, ("Data", "BackendStatistics", "BytesUploaded")
+        ),
+        ATTR_QUOTA_FREE: _dig(
+            data, ("Data", "BackendStatistics", "FreeQuotaSpace")
+        ),
+        ATTR_LOG_LINES: _dig(data, ("Data", "LogLines"), ("LogLines",)),
     }
 
 
@@ -331,6 +359,13 @@ _CLASSIC_FIELD_MAP = {
     "SizeOfModifiedFiles": ATTR_SIZE_MODIFIED,
     "WarningsActualLength": ATTR_WARNINGS_COUNT,
     "ErrorsActualLength": ATTR_ERRORS_COUNT,
+    # These live under a nested "BackendStatistics" section in the
+    # native JSON; included here too in case a future/different
+    # Duplicati version flattens them into the classic text report.
+    "KnownFileSize": ATTR_TOTAL_SIZE,
+    "KnownFilesets": ATTR_VERSIONS,
+    "BytesUploaded": ATTR_BYTES_UPLOADED,
+    "FreeQuotaSpace": ATTR_QUOTA_FREE,
 }
 
 

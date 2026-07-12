@@ -96,15 +96,34 @@ One collector-level device (named after the integration entry) with:
 Per backup job, under a device named after `server_name`:
 
 - `sensor.*_status` - `Success` / `Warning` / `Error` / `Fatal` / `Unknown`
+  (attribute `log_lines`: the last 50 log lines from that run, when
+  Duplicati's native JSON reporting supplies them - not available with
+  the classic plain-text format)
 - `sensor.*_last_backup` - timestamp of the last completed run
 - `sensor.*_duration` - seconds
 - `sensor.*_backup_size` - bytes added/modified this run
+- `sensor.*_total_backup_size` - total size of everything currently
+  stored at the destination (all versions combined)
+- `sensor.*_versions` - number of backup versions currently retained
+- `sensor.*_uploaded_bytes` (diagnostic) - bytes actually uploaded in
+  this run (distinct from `backup_size`, which reflects source-file
+  changes, not network traffic)
+- `sensor.*_destination_free_space` (diagnostic) - free space at the
+  backup destination, when Duplicati reports one
 - `sensor.*_examined_files`, `*_added_files`, `*_modified_files`, `*_deleted_files`
 - `sensor.*_warnings`, `sensor.*_errors` (diagnostic category)
 - `binary_sensor.*_problem` - on when the last run ended in Error/Fatal
 - `sensor.*_last_raw_payload` (diagnostic, disabled by default) - the
   most recent raw incoming payload, for verifying/debugging the native
-  JSON field mapping
+  JSON field mapping. View its content via the entity's "Attributes"
+  section in its more-info dialog, or Developer Tools > States - HA
+  doesn't show custom attributes on the basic entity card.
+
+The `total_backup_size`/`versions`/`uploaded_bytes`/
+`destination_free_space` sensors need Duplicati's native JSON reporting
+(`--send-http-json-urls`) - they come from a `BackendStatistics` block
+that the classic plain-text format (`--send-http-url`) doesn't include.
+Everything else works with either format.
 
 Because the size/duration/file-count sensors use `state_class:
 measurement`, Home Assistant's long-term statistics keep history for
