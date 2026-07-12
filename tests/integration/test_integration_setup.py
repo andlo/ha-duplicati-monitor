@@ -261,3 +261,58 @@ async def test_one_device_per_job_and_orphan_cleanup(hass, hass_client_no_auth):
         )
         is not None
     ), "Per-job device disappeared after restart"
+
+
+async def test_run_history_accumulates_trims_and_survives_restart(
+    hass, hass_client_no_auth
+):
+    """Post several runs, check the history sensor's `runs` attribute
+    grows and is capped at MAX_HISTORY_ENTRIES, then simulate a
+    restart and confirm the history survived."""
+    from custom_components.duplicati_monitor.const import MAX_HISTORY_ENTRIES
+
+    assert await async_setup_component(hass, "http", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Duplicati",
+        data={CONF_WEBHOOK_ID: "duplicati-test7"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    client = await hass_client_no_auth()
+    for i in range(MAX_HISTORY_ENTRIES + 5):
+        resp = await client.post(
+            "/api/webhook/duplicati-test7",
+            json={
+                "server_id": "nas01",
+                "job_id": "documents",
+                "parsed_result": "Success",
+                "examined_files": i,
+            },
+        )
+        assert resp.status == 200
+    await hass.async_block_till_done()
+
+    history_state = hass.states.get("sensor.nas01_documents_history")
+    assert history_state is not None
+    runs = history_state.attributes["runs"]
+    assert len(runs) == MAX_HISTORY_ENTRIES, (
+        f"Expected history capped at {MAX_HISTORY_ENTRIES}, got {len(runs)}"
+    )
+    # Oldest entries should have been dropped - the last run's
+    # examined_files should be the most recent value posted.
+    assert runs[-1]["examined_files"] == MAX_HISTORY_ENTRIES + 4
+
+    # Simulate a restart.
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    history_state = hass.states.get("sensor.nas01_documents_history")
+    assert history_state is not None
+    assert len(history_state.attributes["runs"]) == MAX_HISTORY_ENTRIES, (
+        "Run history did not survive a restart"
+    )

@@ -115,6 +115,10 @@ Per backup job, under its own device named `"{server_name} - {job_name}"`:
 - `sensor.*_examined_files`, `*_added_files`, `*_modified_files`, `*_deleted_files`
 - `sensor.*_warnings`, `sensor.*_errors` (diagnostic category)
 - `binary_sensor.*_problem` - on when the last run ended in Error/Fatal
+- `sensor.*_history` (diagnostic, disabled by default) - the last 20
+  runs for this job, in its `runs` attribute (timestamp, result,
+  file/warning/error counts, a trimmed message) - the data source for
+  the dashboard log view below
 - `sensor.*_last_raw_payload` (diagnostic, disabled by default) - the
   most recent raw incoming payload, for verifying/debugging the native
   JSON field mapping. View its content via the entity's "Attributes"
@@ -126,6 +130,15 @@ The `total_backup_size`/`versions`/`uploaded_bytes`/
 (`--send-http-json-urls`) - they come from a `BackendStatistics` block
 that the classic plain-text format (`--send-http-url`) doesn't include.
 Everything else works with either format.
+
+## Dashboard
+
+[`docs/dashboard.yaml`](docs/dashboard.yaml) is a ready-to-paste
+dashboard: an overview (one row per job, via the `auto-entities` HACS
+card), a size-over-time graph, and a per-job log view built from the
+`history` sensor above using a `markdown` card - no custom frontend
+code, so no separate build/maintenance track. See the comments at the
+top of that file for setup steps.
 
 Because the size/duration/file-count sensors use `state_class:
 measurement`, Home Assistant's long-term statistics keep history for

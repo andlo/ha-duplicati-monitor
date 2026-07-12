@@ -256,6 +256,44 @@ class DuplicatiRawPayloadSensor(DuplicatiJobEntity, SensorEntity):
         self.async_write_ha_state()
 
 
+class DuplicatiHistorySensor(DuplicatiJobEntity, SensorEntity):
+    """Exposes a bounded run history for this job, for a dashboard log
+    view (e.g. a markdown card templating over the `runs` attribute -
+    see docs/dashboard.yaml). State is simply how many runs are stored.
+    """
+
+    _attr_translation_key = "history"
+    _attr_icon = "mdi:history"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, entry_id: str, report: JobReport, runs: list) -> None:
+        super().__init__(entry_id, report)
+        self._attr_unique_id = f"{entry_id}_{report.server_id}_{report.job_id}_history"
+        self._apply(report, runs)
+
+    def _apply(self, report: JobReport, runs: list) -> None:
+        self._report = report
+        self._attr_native_value = len(runs)
+        self._attr_extra_state_attributes = {"runs": runs}
+
+    async def async_added_to_hass(self) -> None:
+        signal = SIGNAL_JOB_UPDATE.format(
+            entry_id=self._entry_id, server_id=self._server_id, job_id=self._job_id
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, signal, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, report: JobReport) -> None:
+        runs = self.hass.data[DOMAIN][self._entry_id]["history"].get(
+            (self._server_id, self._job_id), []
+        )
+        self._apply(report, runs)
+        self.async_write_ha_state()
+
+
 class DuplicatiWebhookInfoSensor(SensorEntity):
     """Always-present sensor showing this collector's webhook URL.
 
@@ -313,12 +351,16 @@ async def async_setup_entry(
 
     @callback
     def _add_job(report: JobReport) -> None:
+        runs = store["history"].get(report.unique_key, [])
         async_add_entities(
             [
                 DuplicatiJobSensor(entry.entry_id, report, description)
                 for description in SENSOR_TYPES
             ]
-            + [DuplicatiRawPayloadSensor(entry.entry_id, report)]
+            + [
+                DuplicatiRawPayloadSensor(entry.entry_id, report),
+                DuplicatiHistorySensor(entry.entry_id, report, runs),
+            ]
         )
 
     for report in store["jobs"].values():

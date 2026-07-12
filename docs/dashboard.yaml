@@ -1,0 +1,59 @@
+# Example dashboard for Duplicati Monitor
+#
+# Uses only built-in Home Assistant cards, plus one HACS card
+# (`auto-entities`) for the overview - no custom Duplicati-specific
+# frontend code to build or maintain.
+#
+# How to use:
+# 1. Install "auto-entities" via HACS > Frontend (search "auto-entities").
+# 2. Settings > Dashboards > Add Dashboard > "New dashboard from scratch",
+#    or edit an existing one. Switch to YAML mode (⋮ menu > Edit in YAML)
+#    and paste the "views:" section below - or copy individual cards
+#    into an existing dashboard.
+# 3. Replace the entity IDs in the per-job "log" card (the last one)
+#    with your own job's sensor.*_history entity - repeat that card
+#    once per job you want a drill-down log for.
+
+title: Duplicati
+views:
+  - title: Backups
+    path: duplicati
+    icon: mdi:backup-restore
+    cards:
+      # --- Overview: one row per job, sorted alphabetically ---
+      - type: custom:auto-entities
+        card:
+          type: glance
+          title: Backup jobs
+          show_state: true
+        filter:
+          include:
+            - entity_id: "sensor.*_status"
+        sort:
+          method: friendly_name
+
+      # --- Trend: total size stored, across all jobs ---
+      - type: history-graph
+        title: Total backup size over time
+        hours_to_show: 168
+        filter:
+          include:
+            - entity_id: "sensor.*_total_backup_size"
+
+      # --- Drill-down log for ONE job (copy this block per job) ---
+      # Swap `sensor.fedora_test_history` for your job's history sensor.
+      # That sensor must be enabled first (it's a diagnostic entity -
+      # Settings > the job's device > "History" > enable via the gear icon).
+      - type: markdown
+        title: "Fedora - TEST: recent runs"
+        content: >
+          {% set runs = state_attr('sensor.fedora_test_history', 'runs') or [] %}
+          {% if runs | length == 0 %}
+          No runs recorded yet.
+          {% else %}
+          | When | Result | Files | Warnings | Errors |
+          |---|---|---|---|---|
+          {% for run in runs | reverse %}
+          | {{ run.end_time or run.recorded_at }} | {{ run.parsed_result }} | {{ run.examined_files }} | {{ run.warnings_count }} | {{ run.errors_count }} |
+          {% endfor %}
+          {% endif %}

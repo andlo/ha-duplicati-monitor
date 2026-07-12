@@ -524,3 +524,32 @@ def report_from_storage(data: dict) -> JobReport:
         raw=data["raw"],
         source_payload=data.get("source_payload"),
     )
+
+
+def report_to_history_entry(report: JobReport) -> dict:
+    """Build a compact record of one run, for the bounded run-history
+    kept per job (see const.MAX_HISTORY_ENTRIES).
+
+    Deliberately excludes source_payload/log_lines (kept only on the
+    "latest" report and the raw-payload sensor) to keep each stored
+    run small - this list is meant for a dashboard log view, not a
+    full audit trail.
+    """
+    raw = report.raw
+    message = raw.get("message")
+    return {
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "parsed_result": raw.get("parsed_result"),
+        "begin_time": raw.get("begin_time"),
+        "end_time": raw.get("end_time"),
+        "duration_seconds": raw.get("duration_seconds"),
+        "examined_files": raw.get("examined_files"),
+        "added_files": raw.get("added_files"),
+        "modified_files": raw.get("modified_files"),
+        "deleted_files": raw.get("deleted_files"),
+        "size_of_added_files": raw.get("size_of_added_files"),
+        "size_of_modified_files": raw.get("size_of_modified_files"),
+        "warnings_count": raw.get("warnings_count"),
+        "errors_count": raw.get("errors_count"),
+        "message": message[:300] if message else None,
+    }

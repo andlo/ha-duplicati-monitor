@@ -12,11 +12,19 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_WEBHOOK_ID, DOMAIN, PLATFORMS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
+from .const import (
+    CONF_WEBHOOK_ID,
+    DOMAIN,
+    MAX_HISTORY_ENTRIES,
+    PLATFORMS,
+    SIGNAL_JOB_UPDATE,
+    SIGNAL_NEW_JOB,
+)
 from .report import (
     JobReport,
     parse_raw_body,
     report_from_storage,
+    report_to_history_entry,
     report_to_storage,
 )
 
@@ -32,9 +40,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     store_helper = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
     persisted = await store_helper.async_load() or {}
 
+    # v0.2.0 nested the saved structure under "jobs"/"history" keys.
+    # Older versions saved the jobs mapping directly as the top-level
+    # dict - detect and read that old shape too, so nobody loses their
+    # persisted "latest report" data when upgrading.
+    if "jobs" in persisted or "history" in persisted:
+        persisted_jobs = persisted.get("jobs", {})
+        persisted_history = persisted.get("history", {})
+    else:
+        persisted_jobs = persisted
+        persisted_history = {}
+
     jobs: dict = {}
     known_jobs: set = set()
-    for job_data in persisted.values():
+    for job_data in persisted_jobs.values():
         try:
             report = report_from_storage(job_data)
         except (KeyError, TypeError):
@@ -43,9 +62,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         jobs[report.unique_key] = report
         known_jobs.add(report.unique_key)
 
+    history: dict = {}
+    for key_str, runs in persisted_history.items():
+        if not isinstance(runs, list):
+            continue
+        server_id, _, job_id = key_str.partition("|")
+        history[(server_id, job_id)] = runs
+
     hass.data[DOMAIN][entry.entry_id] = {
         "jobs": jobs,  # (server_id, job_id) -> JobReport
         "known_jobs": known_jobs,
+        "history": history,  # (server_id, job_id) -> [run entries, oldest first]
         "store": store_helper,
     }
 
@@ -130,10 +157,19 @@ def _build_handler(entry_id: str):
         store["jobs"][key] = report
         store["known_jobs"].add(key)
 
+        runs = store["history"].setdefault(key, [])
+        runs.append(report_to_history_entry(report))
+        del runs[:-MAX_HISTORY_ENTRIES]
+
         await store["store"].async_save(
             {
-                f"{k[0]}|{k[1]}": report_to_storage(v)
-                for k, v in store["jobs"].items()
+                "jobs": {
+                    f"{k[0]}|{k[1]}": report_to_storage(v)
+                    for k, v in store["jobs"].items()
+                },
+                "history": {
+                    f"{k[0]}|{k[1]}": v for k, v in store["history"].items()
+                },
             }
         )
 

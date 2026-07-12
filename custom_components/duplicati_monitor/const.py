@@ -49,5 +49,9 @@ ATTR_BYTES_UPLOADED = "bytes_uploaded"
 ATTR_QUOTA_FREE = "destination_free_space"
 ATTR_LOG_LINES = "log_lines"
 
+# Run-history storage (issue #1): how many past runs to keep per job,
+# for the "history" sensor a dashboard can drill into.
+MAX_HISTORY_ENTRIES = 20
+
 # How long a job may go without a fresh AFTER-event before we consider
 # it "stale" is intentionally NOT handled in v1 - see README roadmap.

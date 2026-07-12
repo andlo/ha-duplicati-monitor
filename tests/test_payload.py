@@ -216,3 +216,23 @@ def test_dotnet_duration_parsed_from_classic_message():
     )
     report = parse_raw_body(raw_body, {})
     assert report.raw["duration_seconds"] == pytest.approx(840.7046721)
+
+
+def test_report_to_history_entry_excludes_bulky_fields():
+    from report import report_to_history_entry
+
+    payload = {
+        "server_id": "nas01",
+        "job_id": "documents",
+        "parsed_result": "Success",
+        "examined_files": 100,
+        "message": "x" * 1000,
+    }
+    report = parse_payload(payload)
+    entry = report_to_history_entry(report)
+    assert entry["parsed_result"] == "Success"
+    assert entry["examined_files"] == 100
+    assert len(entry["message"]) == 300
+    assert "recorded_at" in entry
+    assert "source_payload" not in entry
+    assert "log_lines" not in entry

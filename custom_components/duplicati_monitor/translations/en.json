@@ -42,6 +42,7 @@
       "uploaded_bytes": { "name": "Uploaded" },
       "destination_free_space": { "name": "Destination free space" },
       "raw_payload": { "name": "Last raw payload" },
+      "history": { "name": "History" },
       "webhook_info": { "name": "Webhook" }
     },
     "binary_sensor": {
