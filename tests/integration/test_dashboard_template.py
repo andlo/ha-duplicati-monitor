@@ -8,6 +8,20 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.duplicati_monitor.const import DOMAIN, CONF_WEBHOOK_ID
 
 
+def _find_markdown_card(dashboard: dict) -> dict:
+    """docs/dashboard.yaml uses a `sections`-type view (cards live
+    under view['sections'][i]['cards']), not the older flat
+    view['cards'] - search whichever shape is present."""
+    view = dashboard["views"][0]
+    card_lists = [view["cards"]] if "cards" in view else []
+    card_lists += [s["cards"] for s in view.get("sections", [])]
+    for cards in card_lists:
+        for card in cards:
+            if card.get("type") == "markdown":
+                return card
+    raise AssertionError("No markdown card found in docs/dashboard.yaml")
+
+
 async def test_dashboard_per_job_markdown_template_renders_correctly(
     hass, hass_client_no_auth
 ):
@@ -38,9 +52,7 @@ async def test_dashboard_per_job_markdown_template_renders_correctly(
     with open("docs/dashboard.yaml") as f:
         dashboard = yaml.safe_load(f)
 
-    markdown_card = next(
-        c for c in dashboard["views"][0]["cards"] if c.get("type") == "markdown"
-    )
+    markdown_card = _find_markdown_card(dashboard)
     content_template = markdown_card["content"]
 
     from homeassistant.helpers import template as template_helper
@@ -49,8 +61,8 @@ async def test_dashboard_per_job_markdown_template_renders_correctly(
     rendered = tpl.async_render()
 
     assert "documents" in rendered.lower() or "Duplicati Monitor" in rendered
-    assert "| Server | Job | When | Result | Files | Warnings | Errors |" in rendered
-    assert "|---|---|---|---|---|---|---|" in rendered
+    assert "| Server | Job | When | Result | Files | W/E |" in rendered
+    assert "|---|---|---|---|---|---|" in rendered
     assert "Fatal" in rendered
     assert "Success" in rendered
 
@@ -128,9 +140,7 @@ async def test_dashboard_template_survives_history_entries_missing_new_fields(
 
     with open("docs/dashboard.yaml") as f:
         dashboard = yaml.safe_load(f)
-    markdown_card = next(
-        c for c in dashboard["views"][0]["cards"] if c.get("type") == "markdown"
-    )
+    markdown_card = _find_markdown_card(dashboard)
 
     from homeassistant.helpers import template as template_helper
 

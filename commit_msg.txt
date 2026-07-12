@@ -1,31 +1,42 @@
-Fix "Recent runs" dashboard card rendering blank on a real dashboard
+v0.3.4: next-expected-backup + overdue alerting, dashboard link support, sections layout
 
-Two compounding causes found by testing directly against andlo's live
-Home Assistant instance via its template-eval API:
+Three requests together.
 
-1. Home Assistant's own dashboard YAML editor re-serialises pasted
-   config and rewrites `content: |` (literal block) to `content: >`
-   (folded block) - collapsing every line break into a single space
-   before Jinja ever runs. This happened even though the file itself
-   uses `|`; nothing we control. Rewrote the template so every
-   newline needed in the *output* is emitted explicitly via
-   {{ "\n" }}, rather than depending on a source-level line break
-   surviving - verified by manually folding the template (joining all
-   lines with spaces) and confirming byte-identical rendered output.
+1. New sensor.*_next_expected (timestamp, diagnostic) and
+   binary_sensor.*_overdue (problem, diagnostic) per job. Duplicati
+   doesn't tell us its own schedule, so the expected next-run time is
+   inferred from the median interval between recent runs (same
+   approach duplicati-monitoring.com uses for its "next report
+   expected" column) via a new compute_next_expected() in report.py.
+   Overdue = now() past next_expected + 50% grace (absorbs normal
+   jitter). Needs at least 2 runs before it can estimate anything.
 
-2. Separately, and more fundamental: history entries recorded before
-   v0.3.3 don't have server_name/job_name/server_id/job_id at all.
-   Accessing a missing dict key via Jinja dot-notation (run.server_name)
-   *raises* inside the for-loop rather than rendering blank, which
-   silently broke the entire card for anyone with any pre-existing
-   history - exactly andlo's case. Switched to run.get(key, default)
-   throughout.
+   Overdue can't be purely event-driven - the passage of time alone
+   (no new webhook call) is what should trigger it - so it's
+   re-checked every 15 minutes via async_track_time_interval, not just
+   on SIGNAL_JOB_UPDATE. Build a Home Assistant automation on this
+   turning "on" for alerting.
 
-Confirmed the fix directly against the live instance's real data via
-Home Assistant's template-eval API before shipping, and added two
-regression tests: one that folds the template's own source and checks
-identical output, one that injects an old-style history entry missing
-the newer fields and asserts no exception.
+2. docs/dashboard.yaml's combined run-history table can now link each
+   row's server name to that server's Duplicati web interface, via a
+   `server_urls` map at the top of the markdown template. Duplicati
+   never sends us its own URL, so this can't be auto-discovered - it's
+   a deliberate, documented exception to the "fully generic" dashboard
+   (empty by default, one-time manual fill-in per server).
 
-No custom_components/ changes - dashboard/test-only fix, no new
-release needed for the integration itself.
+3. Dashboard restructured from masonry to `type: sections` so the
+   run-history table can span the full page width via
+   `grid_options: columns: full` - masonry can't make one card span
+   multiple columns. Verified the Jinja/data side of every change
+   against andlo's live instance via Home Assistant's template-eval
+   API before shipping (as established practice for this file after
+   several earlier untested-YAML mistakes) - but the sections/
+   grid_options layout itself isn't something that tool can verify;
+   flagged this explicitly since it's a different kind of check than
+   the data-correctness ones.
+
+New tests: compute_next_expected() unit tests (empty/insufficient
+history, daily-cadence interval math), and an integration test that
+pushes synthetic history at controlled intervals and asserts
+binary_sensor.*_overdue flips on/off correctly purely from time
+passing, plus stays off with fewer than 2 runs.

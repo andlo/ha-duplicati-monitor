@@ -1,8 +1,19 @@
 # Example dashboard for Duplicati Monitor
 #
-# Fully generic - zero per-job or per-installation editing needed.
-# Uses only built-in Home Assistant cards, plus one HACS card
-# (`auto-entities`).
+# Fully generic - zero per-job or per-installation editing needed,
+# EXCEPT the `server_urls` map in the "Recent runs" card below, which
+# links each row to that server's Duplicati web interface. Duplicati
+# never sends us its own URL, so there's no way to auto-discover it -
+# fill in the map once per server, skip it entirely if you don't want
+# links (rows just show plain text instead).
+#
+# LAYOUT NOTE: this uses `type: sections` (not the older masonry
+# layout) so the "Recent runs" table can span the full width via
+# `grid_options: columns: full` - a normal masonry view can't make one
+# card wider than a single column. I can verify the data/Jinja side of
+# this file against a real Home Assistant instance, but not how the
+# grid actually renders on your screen - if the layout doesn't come
+# out as expected, tell me and we'll adjust.
 #
 # The four "Duplicati Total/OK/Problem/Health" summary entities always
 # have the same entity_id regardless of what you named the integration
@@ -16,21 +27,28 @@
 # 1. Install "auto-entities" via HACS > Frontend (search "auto-entities").
 # 2. Settings > Dashboards > Add Dashboard > "New dashboard from scratch",
 #    or edit an existing one. Switch to YAML mode (⋮ menu > Edit in YAML)
-#    and paste everything below. One view, nothing to customise.
+#    and paste everything below.
+# 3. Fill in `server_urls` in the "Recent runs" card with your own
+#    Duplicati web interface addresses (or leave it empty for no links).
 #
 # THE EASIEST DRILL-DOWN: Settings > Devices & Services > Duplicati
 # Monitor > click any job's device. Home Assistant auto-generates that
 # page with every sensor, its history graph, and current value - for
 # every job, automatically, with no dashboard editing at all.
+# Also new: each job now has a "Next expected backup" sensor and an
+# "Overdue" binary sensor (device_class: problem) - build a Home
+# Assistant automation on binary_sensor.*_overdue turning "on" to get
+# alerted when a backup silently stops running, the same idea as
+# duplicati-monitoring.com's "next report expected" column.
 
 title: Duplicati
 views:
   - title: Duplicati
     path: duplicati
     icon: mdi:backup-restore
-    cards:
-      # --- Summary: health gauge + counts ---
-      - type: horizontal-stack
+    type: sections
+    sections:
+      - type: grid
         cards:
           - type: gauge
             entity: sensor.duplicati_health
@@ -56,78 +74,93 @@ views:
                 name: Problem
                 icon: mdi:alert-circle
 
-      # --- One row per job ---
-      - type: custom:auto-entities
-        card:
-          type: entities
-          title: Backup jobs - status
-        filter:
-          include:
-            - integration: duplicati_monitor
-              entity_id: "*_status"
-        sort:
-          method: friendly_name
+      - type: grid
+        cards:
+          # --- One row per job ---
+          - type: custom:auto-entities
+            card:
+              type: entities
+              title: Backup jobs - status
+            filter:
+              include:
+                - integration: duplicati_monitor
+                  entity_id: "*_status"
+            sort:
+              method: friendly_name
 
-      # --- Every job's total size, on one graph ---
-      - type: custom:auto-entities
-        card:
-          type: history-graph
-          title: Total backup size over time
-          hours_to_show: 168
-        filter:
-          include:
-            - integration: duplicati_monitor
-              entity_id: "*_total_backup_size"
+          # --- Every job's total size, on one graph ---
+          - type: custom:auto-entities
+            card:
+              type: history-graph
+              title: Total backup size over time
+              hours_to_show: 168
+            filter:
+              include:
+                - integration: duplicati_monitor
+                  entity_id: "*_total_backup_size"
 
-      # --- Combined activity log, all jobs ---
-      - type: custom:auto-entities
-        card:
-          type: logbook
-          title: Recent activity (all jobs)
-          hours_to_show: 168
-        filter:
-          include:
-            - integration: duplicati_monitor
-              entity_id: "*_status"
+          # --- Combined activity log, all jobs ---
+          - type: custom:auto-entities
+            card:
+              type: logbook
+              title: Recent activity (all jobs)
+              hours_to_show: 168
+            filter:
+              include:
+                - integration: duplicati_monitor
+                  entity_id: "*_status"
 
-      # --- Recent runs, ALL jobs combined into one table ---
-      # Merges every job's history into one list sorted newest-first,
-      # capped at 25 rows total (not per job) - stays readable no
-      # matter how many jobs you have or how much history piles up.
-      # Each job's "History" diagnostic sensor must be enabled first
-      # (Settings > that job's device > History > gear icon) or its
-      # runs won't show up here. Timestamps are shown in your local
-      # timezone.
-      #
-      # Written to survive Home Assistant's own dashboard editor
-      # re-serialising this YAML (it rewrites `content: |` to
-      # `content: >`, which folds line breaks into spaces before Jinja
-      # ever runs) - every newline needed in the *output* is emitted
-      # explicitly via {{ "\n" }} rather than relying on a source line
-      # break surviving, and `run.get(...)` is used throughout instead
-      # of `run.xxx` so older history entries (recorded before a field
-      # existed) don't raise instead of just showing blank/"?".
-      - type: markdown
-        title: Recent runs (all jobs)
-        content: >
-          {%- set history_entities = integration_entities('duplicati_monitor')
-          | select('match', '.*_history$') | list -%}
-          {%- set all_runs = namespace(list=[]) -%}
-          {%- for entity_id in history_entities -%}
-          {%- for run in (state_attr(entity_id, 'runs') or []) -%}
-          {%- set all_runs.list = all_runs.list + [run] -%}
-          {%- endfor -%}
-          {%- endfor -%}
-          {%- set sorted_runs = all_runs.list | sort(attribute='recorded_at',
-          reverse=true) -%}
-          {%- if sorted_runs | length == 0 -%}
-          No runs recorded yet - enable at least one job's History sensor
-          under Settings > that job's device > History.
-          {%- else -%}
-          {{ "| Server | Job | When | Result | Files | Warnings | Errors |" }}{{ "\n" }}{{ "|---|---|---|---|---|---|---|" }}{%- for run in sorted_runs[:25] -%}
-          {%- set ts = run.get('end_time') or run.get('recorded_at') -%}
-          {%- set when = as_local(as_datetime(ts)).strftime('%Y-%m-%d %H:%M')
-          if ts else 'unknown' -%}
-          {{ "\n" }}| {{ run.get('server_name') or run.get('server_id') or "?" }} | {{ run.get('job_name') or run.get('job_id') or "?" }} | {{ when }} | {{ run.get('parsed_result') }} | {{ run.get('examined_files') }} | {{ run.get('warnings_count') }} | {{ run.get('errors_count') }} |
-          {%- endfor -%}
-          {%- endif -%}
+      - type: grid
+        cards:
+          # --- Recent runs, ALL jobs combined into one table ---
+          # Merges every job's history into one list sorted
+          # newest-first, capped at 25 rows total (not per job) -
+          # stays readable no matter how many jobs you have or how
+          # much history piles up. Each job's "History" diagnostic
+          # sensor must be enabled first (Settings > that job's
+          # device > History > gear icon) or its runs won't show up
+          # here. Timestamps are shown in your local timezone.
+          #
+          # Written to survive Home Assistant's own dashboard editor
+          # re-serialising this YAML (it rewrites `content: |` to
+          # `content: >`, which folds line breaks into spaces before
+          # Jinja ever runs) - every newline needed in the *output*
+          # is emitted explicitly via {{ "\n" }} rather than relying
+          # on a source line break surviving, and `run.get(...)` is
+          # used throughout instead of `run.xxx` so older history
+          # entries (recorded before a field existed) don't raise
+          # instead of just showing blank/"?".
+          - type: markdown
+            title: Recent runs (all jobs)
+            grid_options:
+              columns: full
+            content: >
+              {%- set server_urls = {} -%}
+              {%- set history_entities =
+              integration_entities('duplicati_monitor') | select('match',
+              '.*_history$') | list -%}
+              {%- set all_runs = namespace(list=[]) -%}
+              {%- for entity_id in history_entities -%}
+              {%- for run in (state_attr(entity_id, 'runs') or []) -%}
+              {%- set all_runs.list = all_runs.list + [run] -%}
+              {%- endfor -%}
+              {%- endfor -%}
+              {%- set sorted_runs = all_runs.list |
+              sort(attribute='recorded_at', reverse=true) -%}
+              {%- if sorted_runs | length == 0 -%}
+              No runs recorded yet - enable at least one job's History
+              sensor under Settings > that job's device > History.
+              {%- else -%}
+              {{ "| Server | Job | When | Result | Files | W/E |" }}{{ "\n" }}{{ "|---|---|---|---|---|---|" }}{%- for run in sorted_runs[:25] -%}
+              {%- set ts = run.get('end_time') or run.get('recorded_at') -%}
+              {%- set when = as_local(as_datetime(ts)).strftime('%Y-%m-%d %H:%M')
+              if ts else 'unknown' -%}
+              {%- set sname = run.get('server_name') or run.get('server_id') or
+              "?" -%}
+              {%- set surl = server_urls.get(run.get('server_name')) or
+              server_urls.get(run.get('server_id')) -%}
+              {%- set scell = ("[" ~ sname ~ "](" ~ surl ~ ")") if surl else
+              sname -%}
+              {{ "\n" }}| {{ scell }} | {{ run.get('job_name') or run.get('job_id') or "?" }} | {{ when }} | {{ run.get('parsed_result') }} | {{ run.get('examined_files') }} | {{ run.get('warnings_count') }}/{{ run.get('errors_count') }} |
+              {%- endfor -%}
+              {%- endif -%}

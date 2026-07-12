@@ -43,10 +43,12 @@
       "destination_free_space": { "name": "Destination free space" },
       "raw_payload": { "name": "Last raw payload" },
       "history": { "name": "History" },
+      "next_expected": { "name": "Next expected backup" },
       "webhook_info": { "name": "Webhook" }
     },
     "binary_sensor": {
-      "problem": { "name": "Problem" }
+      "problem": { "name": "Problem" },
+      "overdue": { "name": "Overdue" }
     }
   }
 }

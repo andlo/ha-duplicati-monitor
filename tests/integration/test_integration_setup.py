@@ -397,3 +397,73 @@ async def test_stale_summary_entities_migrate_to_new_unique_id(hass):
     assert hass.states.get("sensor.duplicati_total") is not None, (
         "New-style summary entity was not created"
     )
+
+
+async def test_overdue_binary_sensor_flags_late_and_clears_ontime(
+    hass, hass_client_no_auth
+):
+    """Overdue must flip on once the estimated next-run time (+ grace)
+    has passed, purely from time passing - no new webhook call needed
+    - and back off once a fresh report resets the schedule."""
+    from datetime import timedelta
+
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.duplicati_monitor.const import SIGNAL_JOB_UPDATE
+
+    assert await async_setup_component(hass, "http", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Duplicati", data={CONF_WEBHOOK_ID: "overdue-test"}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    client = await hass_client_no_auth()
+    resp = await client.post(
+        "/api/webhook/overdue-test",
+        json={"server_id": "nas01", "job_id": "documents", "parsed_result": "Success"},
+    )
+    assert resp.status == 200
+    await hass.async_block_till_done()
+
+    store = hass.data[DOMAIN][entry.entry_id]
+    key = ("nas01", "documents")
+    report = store["jobs"][key]
+    now = dt_util.utcnow()
+
+    def _push_history_and_recompute(entries):
+        store["history"][key] = entries
+        async_dispatcher_send(
+            hass,
+            SIGNAL_JOB_UPDATE.format(
+                entry_id=entry.entry_id, server_id="nas01", job_id="documents"
+            ),
+            report,
+        )
+
+    # Daily cadence, last run 3 days ago -> clearly overdue.
+    _push_history_and_recompute(
+        [
+            {"recorded_at": (now - timedelta(days=3)).isoformat()},
+            {"recorded_at": (now - timedelta(days=2)).isoformat()},
+        ]
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.nas01_documents_overdue").state == "on"
+
+    # Daily cadence, last run 10 minutes ago -> not due yet.
+    _push_history_and_recompute(
+        [
+            {"recorded_at": (now - timedelta(days=1, minutes=10)).isoformat()},
+            {"recorded_at": (now - timedelta(minutes=10)).isoformat()},
+        ]
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.nas01_documents_overdue").state == "off"
+
+    # Fewer than 2 runs -> can't estimate a schedule, must not be "on".
+    _push_history_and_recompute([{"recorded_at": now.isoformat()}])
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.nas01_documents_overdue").state == "off"

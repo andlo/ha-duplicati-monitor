@@ -236,3 +236,23 @@ def test_report_to_history_entry_excludes_bulky_fields():
     assert "recorded_at" in entry
     assert "source_payload" not in entry
     assert "log_lines" not in entry
+
+
+def test_compute_next_expected_needs_at_least_two_runs():
+    from report import compute_next_expected
+
+    assert compute_next_expected([]) == (None, None)
+    assert compute_next_expected([{"recorded_at": "2026-01-01T00:00:00+00:00"}]) == (None, None)
+
+
+def test_compute_next_expected_daily_cadence():
+    from report import compute_next_expected
+
+    runs = [
+        {"recorded_at": "2026-01-01T03:00:00+00:00"},
+        {"recorded_at": "2026-01-02T03:00:00+00:00"},
+        {"recorded_at": "2026-01-03T03:00:00+00:00"},
+    ]
+    next_expected, interval = compute_next_expected(runs)
+    assert interval == 86400.0  # 24h
+    assert next_expected == "2026-01-04T03:00:00+00:00"

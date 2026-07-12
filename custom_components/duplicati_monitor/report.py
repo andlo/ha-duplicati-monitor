@@ -17,7 +17,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs
 
 import voluptuous as vol
@@ -557,3 +557,41 @@ def report_to_history_entry(report: JobReport) -> dict:
         "errors_count": raw.get("errors_count"),
         "message": message[:300] if message else None,
     }
+
+
+def compute_next_expected(runs: list) -> tuple[str | None, float | None]:
+    """Estimate when the next run should happen, from the intervals
+    between recent runs - Duplicati doesn't tell us its own schedule,
+    so this infers it the same way duplicati-monitoring.com does.
+
+    Returns (next_expected_iso, typical_interval_seconds), both None
+    if there isn't enough history (fewer than 2 runs) to estimate an
+    interval from.
+    """
+    if not runs or len(runs) < 2:
+        return None, None
+
+    timestamps = []
+    for run in runs[-6:]:  # last few runs are enough to estimate a cadence
+        recorded_at = run.get("recorded_at")
+        if not recorded_at:
+            continue
+        try:
+            timestamps.append(datetime.fromisoformat(recorded_at))
+        except ValueError:
+            continue
+    if len(timestamps) < 2:
+        return None, None
+
+    timestamps.sort()
+    intervals = [
+        (timestamps[i] - timestamps[i - 1]).total_seconds()
+        for i in range(1, len(timestamps))
+    ]
+    intervals = [i for i in intervals if i > 0]
+    if not intervals:
+        return None, None
+
+    typical_interval = sorted(intervals)[len(intervals) // 2]  # median
+    next_expected = timestamps[-1] + timedelta(seconds=typical_interval)
+    return next_expected.isoformat(), typical_interval

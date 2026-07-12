@@ -19,6 +19,8 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.network import NoURLAvailableError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_WEBHOOK_ID,
@@ -30,7 +32,8 @@ from .const import (
     SIGNAL_NEW_JOB,
 )
 from .entity import DuplicatiJobEntity
-from .report import JobReport
+from .report import JobReport, compute_next_expected
+
 
 @dataclass(frozen=True, kw_only=True)
 class DuplicatiSensorDescription(SensorEntityDescription):
@@ -323,6 +326,55 @@ class DuplicatiHistorySensor(DuplicatiJobEntity, SensorEntity):
         self.async_write_ha_state()
 
 
+class DuplicatiNextExpectedSensor(DuplicatiJobEntity, SensorEntity):
+    """Estimated next-run time, inferred from the interval between
+    recent runs (Duplicati doesn't expose its own schedule to us).
+    `typical_interval_seconds` attribute holds the interval used.
+    Needs at least 2 runs to estimate anything - state is unknown
+    until then. Pair with binary_sensor.*_overdue for alerting.
+    """
+
+    _attr_translation_key = "next_expected"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:calendar-clock"
+
+    def __init__(self, entry_id: str, report: JobReport, runs: list) -> None:
+        super().__init__(entry_id, report)
+        self._attr_unique_id = f"{entry_id}_{report.server_id}_{report.job_id}_next_expected"
+        self._apply(report, runs)
+
+    def _apply(self, report: JobReport, runs: list) -> None:
+        self._report = report
+        next_expected, interval = compute_next_expected(runs)
+        if next_expected:
+            try:
+                self._attr_native_value = datetime.fromisoformat(next_expected)
+            except ValueError:
+                self._attr_native_value = None
+        else:
+            self._attr_native_value = None
+        self._attr_extra_state_attributes = {
+            "typical_interval_seconds": interval,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        signal = SIGNAL_JOB_UPDATE.format(
+            entry_id=self._entry_id, server_id=self._server_id, job_id=self._job_id
+        )
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, signal, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, report: JobReport) -> None:
+        runs = self.hass.data[DOMAIN][self._entry_id]["history"].get(
+            (self._server_id, self._job_id), []
+        )
+        self._apply(report, runs)
+        self.async_write_ha_state()
+
+
 class DuplicatiWebhookInfoSensor(SensorEntity):
     """Always-present sensor showing this collector's webhook URL.
 
@@ -524,6 +576,7 @@ async def async_setup_entry(
             + [
                 DuplicatiRawPayloadSensor(entry.entry_id, report),
                 DuplicatiHistorySensor(entry.entry_id, report, runs),
+                DuplicatiNextExpectedSensor(entry.entry_id, report, runs),
             ]
         )
 

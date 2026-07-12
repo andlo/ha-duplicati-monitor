@@ -123,6 +123,15 @@ Per backup job, under its own device named `"{server_name} - {job_name}"`:
 - `sensor.*_examined_files`, `*_added_files`, `*_modified_files`, `*_deleted_files`
 - `sensor.*_warnings`, `sensor.*_errors` (diagnostic category)
 - `binary_sensor.*_problem` - on when the last run ended in Error/Fatal
+- `sensor.*_next_expected` (diagnostic) - estimated next-run time,
+  inferred from the interval between recent runs (Duplicati doesn't
+  expose its own schedule to us) - needs at least 2 runs before it can
+  estimate anything
+- `binary_sensor.*_overdue` (diagnostic) - on when a job hasn't
+  reported in longer than its typical interval (+50% grace). Build a
+  Home Assistant automation on this turning "on" to get alerted when a
+  backup silently stops running - re-checked every 15 minutes, so it
+  triggers from time passing alone, not just on a new report
 - `sensor.*_history` (diagnostic, disabled by default) - the last 20
   runs for this job, in its `runs` attribute (timestamp, result,
   file/warning/error counts, a trimmed message) - the data source for
