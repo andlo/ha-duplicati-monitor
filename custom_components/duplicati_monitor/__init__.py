@@ -9,19 +9,43 @@ from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.storage import Store
 
 from .const import CONF_WEBHOOK_ID, DOMAIN, PLATFORMS, SIGNAL_JOB_UPDATE, SIGNAL_NEW_JOB
-from .report import JobReport, parse_raw_body
+from .report import (
+    JobReport,
+    parse_raw_body,
+    report_from_storage,
+    report_to_storage,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+STORAGE_VERSION = 1
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Duplicati Monitor from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+
+    store_helper = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}")
+    persisted = await store_helper.async_load() or {}
+
+    jobs: dict = {}
+    known_jobs: set = set()
+    for job_data in persisted.values():
+        try:
+            report = report_from_storage(job_data)
+        except (KeyError, TypeError):
+            _LOGGER.warning("Skipping corrupt persisted job entry: %r", job_data)
+            continue
+        jobs[report.unique_key] = report
+        known_jobs.add(report.unique_key)
+
     hass.data[DOMAIN][entry.entry_id] = {
-        "jobs": {},  # (server_id, job_id) -> JobReport
-        "known_jobs": set(),
+        "jobs": jobs,  # (server_id, job_id) -> JobReport
+        "known_jobs": known_jobs,
+        "store": store_helper,
     }
 
     webhook.async_register(
@@ -42,6 +66,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clean up persisted job data when the integration is removed."""
+    await Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}").async_remove()
 
 
 def _build_handler(entry_id: str):
@@ -66,6 +95,13 @@ def _build_handler(entry_id: str):
         is_new = key not in store["known_jobs"]
         store["jobs"][key] = report
         store["known_jobs"].add(key)
+
+        await store["store"].async_save(
+            {
+                f"{k[0]}|{k[1]}": report_to_storage(v)
+                for k, v in store["jobs"].items()
+            }
+        )
 
         if is_new:
             _LOGGER.info(

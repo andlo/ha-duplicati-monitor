@@ -425,3 +425,32 @@ def parse_raw_body(raw_body: str, query: dict | None = None) -> JobReport:
         "Payload is neither valid JSON nor Duplicati's classic "
         "form-urlencoded report format."
     )
+
+
+# ---------------------------------------------------------------------
+# Storage (persistence across Home Assistant restarts)
+# ---------------------------------------------------------------------
+
+
+def report_to_storage(report: JobReport) -> dict:
+    """Serialise a JobReport to a JSON-safe dict for HA's Store helper."""
+    return {
+        "server_id": report.server_id,
+        "server_name": report.server_name,
+        "job_id": report.job_id,
+        "job_name": report.job_name,
+        "raw": report.raw,
+        "source_payload": report.source_payload,
+    }
+
+
+def report_from_storage(data: dict) -> JobReport:
+    """Reconstruct a JobReport from report_to_storage() output."""
+    return JobReport(
+        server_id=data["server_id"],
+        server_name=data["server_name"],
+        job_id=data["job_id"],
+        job_name=data["job_name"],
+        raw=data["raw"],
+        source_payload=data.get("source_payload"),
+    )

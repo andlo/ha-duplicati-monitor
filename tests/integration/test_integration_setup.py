@@ -151,3 +151,51 @@ async def test_classic_duplicati_form_report_creates_job_sensors(
         + str(list(hass.states.async_entity_ids("sensor")))
     )
     assert status_state.state == "Success"
+
+
+
+async def test_jobs_survive_a_restart(hass, hass_client_no_auth):
+    """Real-world bug (found 2026-07-12, andlo's live setup): after a HA
+    restart, previously-reporting jobs showed as 'unavailable' until the
+    next Duplicati run, because job state only lived in memory. Jobs
+    must now be persisted and restored immediately on setup."""
+    assert await async_setup_component(hass, "http", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Duplicati",
+        data={CONF_WEBHOOK_ID: "duplicati-test5"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    client = await hass_client_no_auth()
+    resp = await client.post(
+        "/api/webhook/duplicati-test5",
+        json={
+            "server_id": "nas01",
+            "job_id": "documents",
+            "parsed_result": "Success",
+            "examined_files": 42,
+        },
+    )
+    assert resp.status == 200
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.nas01_documents_status").state == "Success"
+
+    # Simulate a Home Assistant restart: unload then set up the entry
+    # again, without ever posting to the webhook in between.
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    status_state = hass.states.get("sensor.nas01_documents_status")
+    assert status_state is not None, (
+        "sensor.nas01_documents_status disappeared entirely after restart"
+    )
+    assert status_state.state == "Success", (
+        f"Expected the persisted 'Success' state to survive the restart, "
+        f"got {status_state.state!r} instead (this is the 'all entities "
+        f"became unavailable' bug)"
+    )
