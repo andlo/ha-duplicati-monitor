@@ -1,6 +1,7 @@
 """The Duplicati Monitor integration."""
 from __future__ import annotations
 
+import json
 import logging
 
 import voluptuous as vol
@@ -51,9 +52,19 @@ def _build_handler(entry_id: str):
         hass: HomeAssistant, webhook_id: str, request: web.Request
     ) -> web.Response:
         try:
-            data = await request.json()
+            # Read and parse manually rather than request.json(): some
+            # senders (Duplicati included) don't reliably set
+            # Content-Type: application/json even though the body is
+            # valid JSON, and HA's request.json() wrapper doesn't expose
+            # aiohttp's content_type=None escape hatch to work around that.
+            raw_body = await request.text()
+            data = json.loads(raw_body)
         except ValueError:
-            _LOGGER.warning("Received non-JSON payload on webhook %s", webhook_id)
+            _LOGGER.warning(
+                "Received non-JSON payload on webhook %s (first 300 chars): %r",
+                webhook_id,
+                raw_body[:300],
+            )
             return web.Response(status=400, text="Invalid JSON")
 
         try:
