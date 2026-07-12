@@ -360,3 +360,40 @@ async def test_summary_sensors_count_jobs_by_status(hass, hass_client_no_auth):
     assert hass.states.get("sensor.duplicati_total").state == "3"
     assert hass.states.get("sensor.duplicati_ok").state == "1"
     assert hass.states.get("sensor.duplicati_problem").state == "2"
+
+
+async def test_stale_summary_entities_migrate_to_new_unique_id(hass):
+    """Real-world bug (andlo, 2026-07-12): renaming the summary sensors
+    in v0.3.1 changed their intended entity_id, but didn't rename the
+    already-registered entities (entity_id is sticky once assigned) -
+    HA's own 'unknown entities used in a dashboard' repair check
+    caught it. v0.3.2 also bumped their unique_id so old registrations
+    become orphaned and get cleaned up automatically on upgrade."""
+    from homeassistant.helpers import entity_registry as er
+
+    entity_registry = er.async_get(hass)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Duplicati Monitor",
+        data={CONF_WEBHOOK_ID: "duplicati-migrate-test"},
+    )
+    entry.add_to_hass(hass)
+
+    # Simulate a pre-0.3.2 registration under the OLD unique_id scheme.
+    stale = entity_registry.async_get_or_create(
+        domain="sensor",
+        platform=DOMAIN,
+        unique_id=f"{entry.entry_id}_summary_jobs_total",
+        config_entry=entry,
+        suggested_object_id="duplicati_monitor_jobs_total",
+    )
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entity_registry.async_get(stale.entity_id) is None, (
+        "Stale pre-0.3.2 summary entity was not cleaned up"
+    )
+    assert hass.states.get("sensor.duplicati_total") is not None, (
+        "New-style summary entity was not created"
+    )

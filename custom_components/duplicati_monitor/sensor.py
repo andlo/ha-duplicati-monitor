@@ -388,7 +388,13 @@ class DuplicatiSummarySensor(SensorEntity):
         self._entry = entry
         self._key = key
         self._predicate = predicate
-        self._attr_unique_id = f"{entry.entry_id}_summary_{key}"
+        self._attr_unique_id = f"{entry.entry_id}_summary2_{key}"
+        # Explicit entity_id: has_entity_name=False only affects the
+        # displayed name, NOT entity_id generation - HA still folds the
+        # device (collector) name into an auto-generated entity_id
+        # otherwise, making it depend on what the user typed as the
+        # integration's name. Setting it directly keeps it fixed.
+        self.entity_id = f"sensor.duplicati_{key}"
         self._attr_name = name
         self._attr_icon = icon
         self._apply()
@@ -439,7 +445,8 @@ class DuplicatiOkPercentSensor(SensorEntity):
 
     def __init__(self, entry: ConfigEntry) -> None:
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_summary_jobs_ok_percent"
+        self._attr_unique_id = f"{entry.entry_id}_summary2_health"
+        self.entity_id = "sensor.duplicati_health"
         self._attr_name = "Duplicati Health %"
         self._apply()
 
@@ -486,18 +493,18 @@ async def async_setup_entry(
         [
             DuplicatiWebhookInfoSensor(entry),
             DuplicatiSummarySensor(
-                entry, "jobs_total", "Duplicati Total", "mdi:counter", lambda raw: True
+                entry, "total", "Duplicati Total", "mdi:counter", lambda raw: True
             ),
             DuplicatiSummarySensor(
                 entry,
-                "jobs_ok",
+                "ok",
                 "Duplicati OK",
                 "mdi:check-circle",
                 lambda raw: raw.get("parsed_result") == "Success",
             ),
             DuplicatiSummarySensor(
                 entry,
-                "jobs_problem",
+                "problem",
                 "Duplicati Problem",
                 "mdi:alert-circle",
                 lambda raw: raw.get("parsed_result") in PROBLEM_RESULTS,

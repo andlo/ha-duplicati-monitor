@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_WEBHOOK_ID,
@@ -92,6 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # cascading into losing their registry entries (and entity_id/
     # history continuity) before they get reassigned.
     _async_remove_orphaned_devices(hass, entry, jobs)
+    _async_remove_stale_summary_entities(hass, entry)
 
     return True
 
@@ -133,6 +135,30 @@ def _async_remove_orphaned_devices(
         if not (device.identifiers & valid_identifiers):
             _LOGGER.info("Removing orphaned device: %s", device.name)
             device_registry.async_remove_device(device.id)
+
+
+def _async_remove_stale_summary_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove pre-0.3.2 registrations of the 4 collector-level summary
+    sensors (jobs total/OK/problem, health %).
+
+    v0.3.1 renamed them to opt out of the usual device-name prefix
+    (for shorter, predictable entity IDs a dashboard can reference
+    directly), but that alone doesn't rename an already-registered
+    entity - v0.3.2 additionally changed their unique_id so they
+    re-register fresh under the new entity IDs. This removes the old,
+    now-orphaned registrations so they don't linger "unavailable"
+    forever - found via andlo hitting HA's own "unknown entities used
+    in a dashboard" repair check after upgrading.
+    """
+    old_prefixes = (
+        f"{entry.entry_id}_summary_",  # pre-0.3.1
+        f"{entry.entry_id}_summary2_jobs_",  # 0.3.1 (entity_id still wasn't fixed)
+    )
+    entity_registry = er.async_get(hass)
+    for entity in list(er.async_entries_for_config_entry(entity_registry, entry.entry_id)):
+        if entity.unique_id and entity.unique_id.startswith(old_prefixes):
+            _LOGGER.info("Removing stale summary entity: %s", entity.entity_id)
+            entity_registry.async_remove(entity.entity_id)
 
 
 def _build_handler(entry_id: str):
