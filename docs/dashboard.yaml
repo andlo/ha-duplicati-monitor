@@ -62,14 +62,14 @@ views:
       - type: markdown
         title: Recent runs
         content: |
-          {% set runs = state_attr('sensor.fedora_test_history', 'runs') or [] %}
-          {% if runs | length == 0 %}
+          {%- set runs = state_attr('sensor.fedora_test_history', 'runs') or [] -%}
+          {%- if runs | length == 0 %}
           No runs recorded yet - enable the "History" diagnostic sensor
           for this job first (Settings > this device > History > gear icon).
-          {% else %}
+          {%- else %}
           | When | Result | Files | Warnings | Errors |
           |---|---|---|---|---|
-          {% for run in runs | reverse %}
-          | {{ run.end_time or run.recorded_at }} | {{ run.parsed_result }} | {{ run.examined_files }} | {{ run.warnings_count }} | {{ run.errors_count }} |
-          {% endfor %}
-          {% endif %}
+          {%- for run in runs | reverse -%}
+          {{ "\n" }}| {{ run.end_time or run.recorded_at }} | {{ run.parsed_result }} | {{ run.examined_files }} | {{ run.warnings_count }} | {{ run.errors_count }} |
+          {%- endfor %}
+          {%- endif %}
