@@ -4,13 +4,20 @@
 # (`auto-entities`) for the overview - no custom Duplicati-specific
 # frontend code to build or maintain.
 #
+# IMPORTANT: every card below filters by `integration: duplicati_monitor`,
+# not by entity_id wildcards - a wildcard like "sensor.*_status" also
+# matches unrelated entities from other integrations that happen to end
+# in "_status" (very common: device trackers, Z-Wave nodes, cameras...).
+# Filtering by integration scopes it to exactly this integration's
+# entities, whatever their names are.
+#
 # How to use:
 # 1. Install "auto-entities" via HACS > Frontend (search "auto-entities").
 # 2. Settings > Dashboards > Add Dashboard > "New dashboard from scratch",
 #    or edit an existing one. Switch to YAML mode (⋮ menu > Edit in YAML)
 #    and paste the "views:" section below - or copy individual cards
 #    into an existing dashboard.
-# 3. Replace the entity IDs in the per-job "log" card (the last one)
+# 3. Replace the entity ID in the per-job "log" card (the last one)
 #    with your own job's sensor.*_history entity - repeat that card
 #    once per job you want a drill-down log for.
 
@@ -28,17 +35,23 @@ views:
           show_state: true
         filter:
           include:
-            - entity_id: "sensor.*_status"
+            - integration: duplicati_monitor
+              entity_id: "*_status"
         sort:
           method: friendly_name
 
       # --- Trend: total size stored, across all jobs ---
-      - type: history-graph
-        title: Total backup size over time
-        hours_to_show: 168
+      # history-graph doesn't support `filter:` natively - wrap it in
+      # auto-entities so it still auto-discovers every job's sensor.
+      - type: custom:auto-entities
+        card:
+          type: history-graph
+          title: Total backup size over time
+          hours_to_show: 168
         filter:
           include:
-            - entity_id: "sensor.*_total_backup_size"
+            - integration: duplicati_monitor
+              entity_id: "*_total_backup_size"
 
       # --- Drill-down log for ONE job (copy this block per job) ---
       # Swap `sensor.fedora_test_history` for your job's history sensor.
