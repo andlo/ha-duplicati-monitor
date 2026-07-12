@@ -4,35 +4,39 @@
 # (`auto-entities`) for the overview - no custom Duplicati-specific
 # frontend code to build or maintain.
 #
-# IMPORTANT: every card below filters by `integration: duplicati_monitor`,
-# not by entity_id wildcards - a wildcard like "sensor.*_status" also
-# matches unrelated entities from other integrations that happen to end
-# in "_status" (very common: device trackers, Z-Wave nodes, cameras...).
-# Filtering by integration scopes it to exactly this integration's
-# entities, whatever their names are.
+# STRUCTURE: an "Overview" tab listing every job's status, plus one
+# extra tab PER JOB with that job's trend graphs and a log table -
+# clicking between tabs at the top of the dashboard IS the "drill
+# down" (no click-through wiring needed, that's what HA's own view
+# tabs already do). Copy the "Fedora - TEST" view block below once per
+# job you want a detail tab for, and swap in that job's entity IDs.
+#
+# Every card filters by `integration: duplicati_monitor`, not by
+# entity_id wildcards - a wildcard like "sensor.*_status" also matches
+# unrelated entities from other integrations that happen to end in
+# "_status" (very common: device trackers, Z-Wave nodes, cameras...).
 #
 # How to use:
 # 1. Install "auto-entities" via HACS > Frontend (search "auto-entities").
 # 2. Settings > Dashboards > Add Dashboard > "New dashboard from scratch",
 #    or edit an existing one. Switch to YAML mode (⋮ menu > Edit in YAML)
-#    and paste the "views:" section below - or copy individual cards
-#    into an existing dashboard.
-# 3. Replace the entity ID in the per-job "log" card (the last one)
-#    with your own job's sensor.*_history entity - repeat that card
-#    once per job you want a drill-down log for.
+#    and paste everything below.
+# 3. For each job's detail tab, replace `sensor.fedora_test_*` with that
+#    job's own entity IDs, and duplicate the view block.
 
 title: Duplicati
 views:
-  - title: Backups
-    path: duplicati
+  - title: Overview
+    path: duplicati-overview
     icon: mdi:backup-restore
     cards:
-      # --- Overview: one row per job, sorted alphabetically ---
+      # One row per job: icon (color-coded by result), name, state.
+      # Click a row to open HA's built-in more-info dialog (history +
+      # attributes, including log_lines) - works with zero extra config.
       - type: custom:auto-entities
         card:
-          type: glance
+          type: entities
           title: Backup jobs
-          show_state: true
         filter:
           include:
             - integration: duplicati_monitor
@@ -40,9 +44,11 @@ views:
         sort:
           method: friendly_name
 
-      # --- Trend: total size stored, across all jobs ---
-      # history-graph doesn't support `filter:` natively - wrap it in
-      # auto-entities so it still auto-discovers every job's sensor.
+  # --- Detail tab for ONE job - duplicate this whole view per job ---
+  - title: Fedora - TEST
+    path: duplicati-fedora-test
+    icon: mdi:server
+    cards:
       - type: custom:auto-entities
         card:
           type: history-graph
@@ -51,18 +57,15 @@ views:
         filter:
           include:
             - integration: duplicati_monitor
-              entity_id: "*_total_backup_size"
+              entity_id: "sensor.fedora_test_total_backup_size"
 
-      # --- Drill-down log for ONE job (copy this block per job) ---
-      # Swap `sensor.fedora_test_history` for your job's history sensor.
-      # That sensor must be enabled first (it's a diagnostic entity -
-      # Settings > the job's device > "History" > enable via the gear icon).
       - type: markdown
-        title: "Fedora - TEST: recent runs"
-        content: >
+        title: Recent runs
+        content: |
           {% set runs = state_attr('sensor.fedora_test_history', 'runs') or [] %}
           {% if runs | length == 0 %}
-          No runs recorded yet.
+          No runs recorded yet - enable the "History" diagnostic sensor
+          for this job first (Settings > this device > History > gear icon).
           {% else %}
           | When | Result | Files | Warnings | Errors |
           |---|---|---|---|---|

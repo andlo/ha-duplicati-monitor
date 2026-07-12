@@ -30,6 +30,7 @@ class DuplicatiSensorDescription(SensorEntityDescription):
 
     value_fn: callable = lambda raw: None
     include_log: bool = False
+    icon_fn: callable | None = None
 
 
 def _size_bytes(raw: dict) -> int | None:
@@ -40,6 +41,19 @@ def _size_bytes(raw: dict) -> int | None:
     return added + modified
 
 
+_STATUS_ICONS = {
+    "Success": "mdi:check-circle",
+    "Warning": "mdi:alert",
+    "Error": "mdi:alert-circle",
+    "Fatal": "mdi:close-circle",
+    "Unknown": "mdi:help-circle",
+}
+
+
+def _status_icon(raw: dict) -> str:
+    return _STATUS_ICONS.get(raw.get("parsed_result"), "mdi:backup-restore")
+
+
 SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
     DuplicatiSensorDescription(
         key="status",
@@ -47,6 +61,7 @@ SENSOR_TYPES: tuple[DuplicatiSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=PARSED_RESULTS,
         value_fn=lambda raw: raw.get("parsed_result"),
+        icon_fn=_status_icon,
         include_log=True,
     ),
     DuplicatiSensorDescription(
@@ -186,6 +201,8 @@ class DuplicatiJobSensor(DuplicatiJobEntity, SensorEntity):
             except ValueError:
                 value = None
         self._attr_native_value = value
+        if self.entity_description.icon_fn:
+            self._attr_icon = self.entity_description.icon_fn(report.raw)
         attributes = {
             "job_name": report.job_name,
             "job_id": report.job_id,
