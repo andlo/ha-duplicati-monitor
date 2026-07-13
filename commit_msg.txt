@@ -1,33 +1,17 @@
-Fix dashboard layout: table wasn't actually using its width
+Rebalance dashboard top row 50/50 after live layout review
 
-andlo hand-edited the live dashboard trying to get "Recent runs" to
-span wider, but it stayed narrow, and asked me to look at what he'd
-changed and improve it. Pulled the live config directly via Home
-Assistant's dashboard API to see exactly what was there.
+andlo's live dashboard showed the top row split 25/75 (gauge+jobs vs
+the status list) rather than evenly, and the "Recent runs" table
+still wasn't using its full width despite the section/grid_options
+already being correct per Home Assistant's documented sizing rules -
+confirmed by pulling the live config back out unchanged.
 
-Root cause: cards in a sections view don't auto-scale to match their
-section's spanned width. A section's `column_span` widens its
-internal grid proportionally (column_span: 2 = a 24-column grid
-instead of the base 12), but a card left at its default `columns: 12`
-still only fills 12 of those columns - half the section, in that
-case - leaving the rest blank. The live dashboard had this on several
-cards (the status list only used 1/3 of its 3-span section; graph and
-logbook each only used half of theirs), plus a leftover empty section
-and a `columns: 36` on the markdown card, which isn't a valid value in
-that context.
+Rebalanced the top row to a 50/50 column_span split (concrete,
+low-risk proportion change). Left the table-width issue itself
+unresolved for now and asked andlo to enable the dashboard-screenshot
+beta feature so it can be verified visually instead of guessed at
+further - config-level checks have confirmed the JSON is correct, so
+whatever's happening now is a rendering/CSS question that needs an
+actual screenshot to diagnose properly.
 
-Fixed by giving every card an explicit `grid_options.columns` (mostly
-`full`), and split into five purpose-built sections: gauge+glance
-narrow at top, job-status list at 3/4 width, run-history table at full
-width (column_span: 4, matching max_columns), then graph and logbook
-side by side at half each with `rows: auto` so they grow with content
-instead of a fixed height - addressing the "grow downward as more jobs
-show up" ask directly.
-
-Applied and verified live via Home Assistant's dashboard config API
-(pulled the config back out after writing to confirm every
-grid_options landed correctly) - a screenshot would have been the
-final confirmation but that beta feature is disabled on this instance,
-so the actual visual result still needs andlo to look at it.
-
-No custom_components/ changes - dashboard-only fix, no new release.
+No custom_components/ changes - dashboard-only, no new release.

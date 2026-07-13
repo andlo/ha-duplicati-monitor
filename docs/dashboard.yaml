@@ -51,9 +51,9 @@ views:
     type: sections
     max_columns: 4
     sections:
-      # --- Health gauge + job counts, side by side (narrow section) ---
+      # --- Health gauge + job counts (left half of the top row) ---
       - type: grid
-        column_span: 1
+        column_span: 2
         cards:
           - type: gauge
             entity: sensor.duplicati_health
@@ -83,9 +83,9 @@ views:
             grid_options:
               columns: 6
 
-      # --- One row per job (wider section, 3/4 of the page) ---
+      # --- One row per job (right half of the top row) ---
       - type: grid
-        column_span: 3
+        column_span: 2
         cards:
           - type: custom:auto-entities
             card:
