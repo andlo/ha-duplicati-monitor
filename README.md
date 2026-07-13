@@ -15,11 +15,18 @@ work out of the box. If several jobs run on the same server, assign
 their devices to the same Home Assistant **Area** to keep them grouped
 by physical machine while still having a manageable device page per job.
 
+Ships its own icon (`custom_components/duplicati_monitor/brand/`,
+source in `design/icon.svg`) - an original design, not Duplicati's own
+logo, since this is an unofficial community integration with no
+affiliation to the Duplicati project. Picked up automatically by Home
+Assistant 2026.3+; older versions just show the default icon.
+
 ## Status
 
-v0.1.0. Core webhook receiving, dynamic per-job devices/entities, and
-the sensors above are implemented. Not yet included (see Roadmap): a
-detailed run-by-run log view and a bundled dashboard.
+v0.3.5. Core webhook receiving, dynamic per-job devices/entities, run
+history, summary sensors, overdue alerting, and an example dashboard
+are implemented. See [GitHub issues](https://github.com/andlo/ha-duplicati-monitor/issues)
+for what's still open.
 
 ## Installation
 

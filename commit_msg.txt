@@ -1,30 +1,16 @@
-Move Recent runs table to its own panel view, fix table width with card-mod
+v0.3.5: add integration icon
 
-andlo pointed out something I'd missed: he'd already tried widening
-the table via the visual editor earlier today, and the CARD got
-wider but the TABLE inside it didn't - meaning the whole `sections`/
-`grid_options` investigation was solving the wrong problem. Confirmed
-via web search: Home Assistant's markdown card strips `style`
-attributes from its own rendered content for security, so even a raw
-`<table style="width:100%">` inside the markdown gets silently
-stripped - multiple community reports of the exact same symptom.
+Resumed the icon work that got shelved earlier in the project. An
+original design (not Duplicati's own logo - this is an unofficial
+community integration with no affiliation to the Duplicati project):
+stacked "version" bars representing incremental/versioned backups,
+with a magnifying-glass badge representing monitoring, on a blue
+gradient background.
 
-Two-part fix:
-1. card-mod (already installed) injects CSS from outside the
-   sanitized content area, bypassing the strip - `table { width: 100%
-   }` now actually takes effect.
-2. Moved the table into its own dedicated `type: panel` view (a new
-   "Recent runs" tab) instead of trying to make it span columns in the
-   main view. A panel view forces its one card to fill the entire
-   page - no column/grid-span math involved at all, unlike every
-   `sections`-view attempt so far, all of which produced results that
-   didn't match Home Assistant's own documented sizing rules on this
-   real dashboard.
+Source SVG in design/icon.svg, rasterized to icon.png (256x256) and
+icon@2x.png (512x512) via cairosvg, placed in
+custom_components/duplicati_monitor/brand/ - Home Assistant 2026.3+
+picks up custom-integration brand images from that location
+automatically, no manifest changes needed.
 
-Kept the main "Duplicati" view on masonry (stable, unaffected).
-
-Updated tests/integration/test_dashboard_template.py's
-_find_markdown_card() helper to search across all views, not just
-views[0], since the table moved to a second view.
-
-No custom_components/ changes - dashboard-only, no new release.
+Also updated README's stale "Status: v0.1.0" line, long out of date.
