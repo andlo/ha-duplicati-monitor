@@ -155,6 +155,17 @@ The `total_backup_size`/`versions`/`uploaded_bytes`/
 that the classic plain-text format (`--send-http-url`) doesn't include.
 Everything else works with either format.
 
+## Removing a retired job
+
+Jobs are remembered permanently (so entities survive Home Assistant
+restarts), so deleting a job's device via Settings > Devices &
+Services > that device > the trash icon is the *only* correct way to
+remove it - it also purges the job from this integration's storage, so
+it stays gone. Deleting individual entities instead, or removing the
+job in Duplicati without also deleting the device here, won't do that
+- the device will just reappear (state `unavailable`) waiting for the
+next report, or come back after the next restart.
+
 ## Dashboard
 
 [`docs/dashboard.yaml`](docs/dashboard.yaml) is a ready-to-paste,

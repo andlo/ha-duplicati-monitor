@@ -467,3 +467,62 @@ async def test_overdue_binary_sensor_flags_late_and_clears_ontime(
     _push_history_and_recompute([{"recorded_at": now.isoformat()}])
     await hass.async_block_till_done()
     assert hass.states.get("binary_sensor.nas01_documents_overdue").state == "off"
+
+
+async def test_deleting_job_device_purges_persisted_storage_permanently(
+    hass, hass_client_no_auth
+):
+    """andlo asked how to permanently remove a retired test job
+    (2026-07-13) - deleting the device via the UI alone didn't help,
+    since v0.2.0's restart-persistence would just bring it back.
+    async_remove_config_entry_device must purge it from our own
+    storage too, so it stays gone after a restart."""
+    from custom_components.duplicati_monitor import (
+        async_remove_config_entry_device,
+    )
+    from homeassistant.helpers import device_registry as dr
+
+    assert await async_setup_component(hass, "http", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Duplicati", data={CONF_WEBHOOK_ID: "delete-test"}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    client = await hass_client_no_auth()
+    resp = await client.post(
+        "/api/webhook/delete-test",
+        json={"server_id": "nas01", "job_id": "documents", "parsed_result": "Success"},
+    )
+    assert resp.status == 200
+    await hass.async_block_till_done()
+
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_device(
+        identifiers={(DOMAIN, f"{entry.entry_id}_nas01_documents")}
+    )
+    assert device is not None, "Job device was not created"
+
+    result = await async_remove_config_entry_device(hass, entry, device)
+    assert result is True
+
+    store = hass.data[DOMAIN][entry.entry_id]
+    assert ("nas01", "documents") not in store["jobs"]
+    assert ("nas01", "documents") not in store["history"]
+
+    # Simulate an actual UI deletion (HA removes the device/entities
+    # itself when the hook returns True) and a restart.
+    device_registry.async_remove_device(device.id)
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert (
+        device_registry.async_get_device(
+            identifiers={(DOMAIN, f"{entry.entry_id}_nas01_documents")}
+        )
+        is None
+    ), "Job device came back after a restart - storage wasn't actually purged"
+    assert hass.states.get("sensor.nas01_documents_status") is None

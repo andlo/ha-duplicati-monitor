@@ -112,6 +112,51 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}").async_remove()
 
 
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device_entry
+) -> bool:
+    """Let the user permanently delete one job's device via the UI
+    (Settings > Devices & Services > that device > the trash icon).
+
+    Without this hook, jobs are only ever forgotten by us, never by
+    request - since v0.2.0 persists every known job so entities survive
+    restarts, a device deleted through the UI alone would simply come
+    back on the next restart. This purges the job from storage too, so
+    "delete device" actually means delete - see andlo asking how to
+    remove a retired test job (2026-07-13).
+    """
+    store = hass.data[DOMAIN][entry.entry_id]
+    target_key = None
+    for key, report in store["jobs"].items():
+        job_device_id = f"{entry.entry_id}_{report.server_id}_{report.job_id}"
+        if (DOMAIN, job_device_id) in device_entry.identifiers:
+            target_key = key
+            break
+
+    if target_key is None:
+        # Not a per-job device (e.g. the "Webhook" collector hub) -
+        # nothing of ours to purge, just allow the removal.
+        return True
+
+    store["jobs"].pop(target_key, None)
+    store["known_jobs"].discard(target_key)
+    store["history"].pop(target_key, None)
+
+    await store["store"].async_save(
+        {
+            "jobs": {
+                f"{k[0]}|{k[1]}": report_to_storage(v)
+                for k, v in store["jobs"].items()
+            },
+            "history": {
+                f"{k[0]}|{k[1]}": v for k, v in store["history"].items()
+            },
+        }
+    )
+    _LOGGER.info("Removed job %s from persisted storage", target_key)
+    return True
+
+
 def _async_remove_orphaned_devices(
     hass: HomeAssistant, entry: ConfigEntry, jobs: dict
 ) -> None:

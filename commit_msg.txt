@@ -1,16 +1,21 @@
-v0.3.5: add integration icon
+v0.3.6: allow permanently deleting a job's device (closes issue #3)
 
-Resumed the icon work that got shelved earlier in the project. An
-original design (not Duplicati's own logo - this is an unofficial
-community integration with no affiliation to the Duplicati project):
-stacked "version" bars representing incremental/versioned backups,
-with a magnifying-glass badge representing monitoring, on a blue
-gradient background.
+andlo asked how to remove a retired test job ("fedora - TEST") -
+turned out there was no way to do it. Deleting the device via
+Settings > Devices & Services alone doesn't help: since v0.2.0
+persists every known job so entities survive restarts, the device
+would just come back on the next restart or next report.
 
-Source SVG in design/icon.svg, rasterized to icon.png (256x256) and
-icon@2x.png (512x512) via cairosvg, placed in
-custom_components/duplicati_monitor/brand/ - Home Assistant 2026.3+
-picks up custom-integration brand images from that location
-automatically, no manifest changes needed.
+Added async_remove_config_entry_device - the official Home Assistant
+hook for exactly this (multi-device integrations letting users remove
+individual devices via the UI's trash icon). Purges the job from our
+own storage (jobs + history) before returning True to let HA proceed
+with the actual removal, so "delete device" now actually means delete.
 
-Also updated README's stale "Status: v0.1.0" line, long out of date.
+Documented in a new README section, since silently-reappearing devices
+after a "successful" deletion would be a confusing failure mode
+otherwise.
+
+Covered by a new test: create a job, delete its device through the
+same hook HA calls, simulate a restart, assert it doesn't come back
+and the sensor is genuinely gone.
