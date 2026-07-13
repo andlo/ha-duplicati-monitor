@@ -1,19 +1,22 @@
 # Example dashboard for Duplicati Monitor
 #
 # Fully generic - zero per-job or per-installation editing needed,
-# EXCEPT the `server_urls` map in the "Recent runs" card below, which
-# links each row to that server's Duplicati web interface. Duplicati
-# never sends us its own URL, so there's no way to auto-discover it -
-# fill in the map once per server, skip it entirely if you don't want
-# links (rows just show plain text instead).
+# EXCEPT the `server_urls` map in the "Recent runs" card, which links
+# each row to that server's Duplicati web interface. Duplicati never
+# sends us its own URL, so there's no way to auto-discover it - fill
+# in the map once per server, skip it entirely if you don't want links.
 #
-# LAYOUT NOTE: this uses `type: sections` (not the older masonry
-# layout) so the "Recent runs" table can span the full width via
-# `grid_options: columns: full` - a normal masonry view can't make one
-# card wider than a single column. I can verify the data/Jinja side of
-# this file against a real Home Assistant instance, but not how the
-# grid actually renders on your screen - if the layout doesn't come
-# out as expected, tell me and we'll adjust.
+# LAYOUT: uses `type: sections` with explicit `grid_options` on every
+# card - a section is a 12-column grid by default, and a section's
+# `column_span` widens that grid proportionally (column_span: 2 = a
+# 24-column grid), but a card's own width does NOT auto-scale with
+# it - a card left at its default `columns: 12` only fills half of a
+# column_span: 2 section, leaving blank space next to it. Every card
+# below sets `grid_options.columns` explicitly (usually "full") for
+# exactly this reason - this was fixed after andlo's real dashboard
+# showed the "Recent runs" table wasn't actually using the width it
+# had, and confirmed against Home Assistant's own dashboard-layout
+# documentation.
 #
 # The four "Duplicati Total/OK/Problem/Health" summary entities always
 # have the same entity_id regardless of what you named the integration
@@ -35,11 +38,10 @@
 # Monitor > click any job's device. Home Assistant auto-generates that
 # page with every sensor, its history graph, and current value - for
 # every job, automatically, with no dashboard editing at all.
-# Also new: each job now has a "Next expected backup" sensor and an
-# "Overdue" binary sensor (device_class: problem) - build a Home
-# Assistant automation on binary_sensor.*_overdue turning "on" to get
-# alerted when a backup silently stops running, the same idea as
-# duplicati-monitoring.com's "next report expected" column.
+# Also: each job has a "Next expected backup" sensor and an "Overdue"
+# binary sensor (device_class: problem) - build a Home Assistant
+# automation on binary_sensor.*_overdue turning "on" to get alerted
+# when a backup silently stops running.
 
 title: Duplicati
 views:
@@ -47,8 +49,11 @@ views:
     path: duplicati
     icon: mdi:backup-restore
     type: sections
+    max_columns: 4
     sections:
+      # --- Health gauge + job counts, side by side (narrow section) ---
       - type: grid
+        column_span: 1
         cards:
           - type: gauge
             entity: sensor.duplicati_health
@@ -59,6 +64,8 @@ views:
               green: 80
               yellow: 50
               red: 0
+            grid_options:
+              columns: 6
 
           - type: glance
             title: Jobs
@@ -73,10 +80,13 @@ views:
               - entity: sensor.duplicati_problem
                 name: Problem
                 icon: mdi:alert-circle
+            grid_options:
+              columns: 6
 
+      # --- One row per job (wider section, 3/4 of the page) ---
       - type: grid
+        column_span: 3
         cards:
-          # --- One row per job ---
           - type: custom:auto-entities
             card:
               type: entities
@@ -87,49 +97,30 @@ views:
                   entity_id: "*_status"
             sort:
               method: friendly_name
+            grid_options:
+              columns: full
 
-          # --- Every job's total size, on one graph ---
-          - type: custom:auto-entities
-            card:
-              type: history-graph
-              title: Total backup size over time
-              hours_to_show: 168
-            filter:
-              include:
-                - integration: duplicati_monitor
-                  entity_id: "*_total_backup_size"
-
-          # --- Combined activity log, all jobs ---
-          - type: custom:auto-entities
-            card:
-              type: logbook
-              title: Recent activity (all jobs)
-              hours_to_show: 168
-            filter:
-              include:
-                - integration: duplicati_monitor
-                  entity_id: "*_status"
-
+      # --- Recent runs, ALL jobs combined, full page width ---
+      # Merges every job's history into one list sorted newest-first,
+      # capped at 25 rows total (not per job) - stays readable no
+      # matter how many jobs you have or how much history piles up.
+      # Each job's "History" diagnostic sensor must be enabled first
+      # (Settings > that job's device > History > gear icon) or its
+      # runs won't show up here. Timestamps are shown in your local
+      # timezone.
+      #
+      # Written to survive Home Assistant's own dashboard editor
+      # re-serialising this YAML (it rewrites `content: |` to
+      # `content: >`, which folds line breaks into spaces before
+      # Jinja ever runs) - every newline needed in the *output* is
+      # emitted explicitly via {{ "\n" }} rather than relying on a
+      # source line break surviving, and `run.get(...)` is used
+      # throughout instead of `run.xxx` so older history entries
+      # (recorded before a field existed) don't raise instead of
+      # just showing blank/"?".
       - type: grid
+        column_span: 4
         cards:
-          # --- Recent runs, ALL jobs combined into one table ---
-          # Merges every job's history into one list sorted
-          # newest-first, capped at 25 rows total (not per job) -
-          # stays readable no matter how many jobs you have or how
-          # much history piles up. Each job's "History" diagnostic
-          # sensor must be enabled first (Settings > that job's
-          # device > History > gear icon) or its runs won't show up
-          # here. Timestamps are shown in your local timezone.
-          #
-          # Written to survive Home Assistant's own dashboard editor
-          # re-serialising this YAML (it rewrites `content: |` to
-          # `content: >`, which folds line breaks into spaces before
-          # Jinja ever runs) - every newline needed in the *output*
-          # is emitted explicitly via {{ "\n" }} rather than relying
-          # on a source line break surviving, and `run.get(...)` is
-          # used throughout instead of `run.xxx` so older history
-          # entries (recorded before a field existed) don't raise
-          # instead of just showing blank/"?".
           - type: markdown
             title: Recent runs (all jobs)
             grid_options:
@@ -164,3 +155,37 @@ views:
               {{ "\n" }}| {{ scell }} | {{ run.get('job_name') or run.get('job_id') or "?" }} | {{ when }} | {{ run.get('parsed_result') }} | {{ run.get('examined_files') }} | {{ run.get('warnings_count') }}/{{ run.get('errors_count') }} |
               {%- endfor -%}
               {%- endif -%}
+
+      # --- Trend graph + combined log, side by side, growing downward
+      # with content (rows: auto) rather than a fixed height ---
+      - type: grid
+        column_span: 2
+        cards:
+          - type: custom:auto-entities
+            card:
+              type: history-graph
+              title: Total backup size over time
+              hours_to_show: 168
+            filter:
+              include:
+                - integration: duplicati_monitor
+                  entity_id: "*_total_backup_size"
+            grid_options:
+              columns: full
+              rows: auto
+
+      - type: grid
+        column_span: 2
+        cards:
+          - type: custom:auto-entities
+            card:
+              type: logbook
+              title: Recent activity (all jobs)
+              hours_to_show: 168
+            filter:
+              include:
+                - integration: duplicati_monitor
+                  entity_id: "*_status"
+            grid_options:
+              columns: full
+              rows: auto

@@ -1,42 +1,33 @@
-v0.3.4: next-expected-backup + overdue alerting, dashboard link support, sections layout
+Fix dashboard layout: table wasn't actually using its width
 
-Three requests together.
+andlo hand-edited the live dashboard trying to get "Recent runs" to
+span wider, but it stayed narrow, and asked me to look at what he'd
+changed and improve it. Pulled the live config directly via Home
+Assistant's dashboard API to see exactly what was there.
 
-1. New sensor.*_next_expected (timestamp, diagnostic) and
-   binary_sensor.*_overdue (problem, diagnostic) per job. Duplicati
-   doesn't tell us its own schedule, so the expected next-run time is
-   inferred from the median interval between recent runs (same
-   approach duplicati-monitoring.com uses for its "next report
-   expected" column) via a new compute_next_expected() in report.py.
-   Overdue = now() past next_expected + 50% grace (absorbs normal
-   jitter). Needs at least 2 runs before it can estimate anything.
+Root cause: cards in a sections view don't auto-scale to match their
+section's spanned width. A section's `column_span` widens its
+internal grid proportionally (column_span: 2 = a 24-column grid
+instead of the base 12), but a card left at its default `columns: 12`
+still only fills 12 of those columns - half the section, in that
+case - leaving the rest blank. The live dashboard had this on several
+cards (the status list only used 1/3 of its 3-span section; graph and
+logbook each only used half of theirs), plus a leftover empty section
+and a `columns: 36` on the markdown card, which isn't a valid value in
+that context.
 
-   Overdue can't be purely event-driven - the passage of time alone
-   (no new webhook call) is what should trigger it - so it's
-   re-checked every 15 minutes via async_track_time_interval, not just
-   on SIGNAL_JOB_UPDATE. Build a Home Assistant automation on this
-   turning "on" for alerting.
+Fixed by giving every card an explicit `grid_options.columns` (mostly
+`full`), and split into five purpose-built sections: gauge+glance
+narrow at top, job-status list at 3/4 width, run-history table at full
+width (column_span: 4, matching max_columns), then graph and logbook
+side by side at half each with `rows: auto` so they grow with content
+instead of a fixed height - addressing the "grow downward as more jobs
+show up" ask directly.
 
-2. docs/dashboard.yaml's combined run-history table can now link each
-   row's server name to that server's Duplicati web interface, via a
-   `server_urls` map at the top of the markdown template. Duplicati
-   never sends us its own URL, so this can't be auto-discovered - it's
-   a deliberate, documented exception to the "fully generic" dashboard
-   (empty by default, one-time manual fill-in per server).
+Applied and verified live via Home Assistant's dashboard config API
+(pulled the config back out after writing to confirm every
+grid_options landed correctly) - a screenshot would have been the
+final confirmation but that beta feature is disabled on this instance,
+so the actual visual result still needs andlo to look at it.
 
-3. Dashboard restructured from masonry to `type: sections` so the
-   run-history table can span the full page width via
-   `grid_options: columns: full` - masonry can't make one card span
-   multiple columns. Verified the Jinja/data side of every change
-   against andlo's live instance via Home Assistant's template-eval
-   API before shipping (as established practice for this file after
-   several earlier untested-YAML mistakes) - but the sections/
-   grid_options layout itself isn't something that tool can verify;
-   flagged this explicitly since it's a different kind of check than
-   the data-correctness ones.
-
-New tests: compute_next_expected() unit tests (empty/insufficient
-history, daily-cadence interval math), and an integration test that
-pushes synthetic history at controlled intervals and asserts
-binary_sensor.*_overdue flips on/off correctly purely from time
-passing, plus stays off with fewer than 2 runs.
+No custom_components/ changes - dashboard-only fix, no new release.
