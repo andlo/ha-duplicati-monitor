@@ -6,17 +6,19 @@
 # sends us its own URL, so there's no way to auto-discover it - fill
 # in the map once per server, skip it entirely if you don't want links.
 #
-# LAYOUT: uses `type: sections` with explicit `grid_options` on every
-# card - a section is a 12-column grid by default, and a section's
-# `column_span` widens that grid proportionally (column_span: 2 = a
-# 24-column grid), but a card's own width does NOT auto-scale with
-# it - a card left at its default `columns: 12` only fills half of a
-# column_span: 2 section, leaving blank space next to it. Every card
-# below sets `grid_options.columns` explicitly (usually "full") for
-# exactly this reason - this was fixed after andlo's real dashboard
-# showed the "Recent runs" table wasn't actually using the width it
-# had, and confirmed against Home Assistant's own dashboard-layout
-# documentation.
+# LAYOUT: a single `sections`-view section, everything sized with
+# per-card `grid_options.columns` on that ONE section's 12-column
+# grid (3+3+6=12 for the top row, "full" for the table, 6+6=12 for
+# graph+logbook). An earlier version split this across multiple
+# separate sections with `column_span`, which produced unexplained
+# gaps between sections and a "Recent runs" table that stayed narrow
+# despite `columns: full` being set correctly - andlo's live
+# screenshots showed this happening even though the config matched
+# Home Assistant's documented sizing rules. Consolidating into one
+# section removes inter-section layout as a variable entirely, which
+# is more than I could actually verify visually (no screenshot tooling
+# available for this instance) - tell me if it still doesn't look
+# right and we'll keep adjusting.
 #
 # The four "Duplicati Total/OK/Problem/Health" summary entities always
 # have the same entity_id regardless of what you named the integration
@@ -49,11 +51,8 @@ views:
     path: duplicati
     icon: mdi:backup-restore
     type: sections
-    max_columns: 4
     sections:
-      # --- Health gauge + job counts (left half of the top row) ---
       - type: grid
-        column_span: 2
         cards:
           - type: gauge
             entity: sensor.duplicati_health
@@ -65,7 +64,7 @@ views:
               yellow: 50
               red: 0
             grid_options:
-              columns: 6
+              columns: 3
 
           - type: glance
             title: Jobs
@@ -81,12 +80,9 @@ views:
                 name: Problem
                 icon: mdi:alert-circle
             grid_options:
-              columns: 6
+              columns: 3
 
-      # --- One row per job (right half of the top row) ---
-      - type: grid
-        column_span: 2
-        cards:
+          # --- One row per job ---
           - type: custom:auto-entities
             card:
               type: entities
@@ -98,29 +94,26 @@ views:
             sort:
               method: friendly_name
             grid_options:
-              columns: full
+              columns: 6
 
-      # --- Recent runs, ALL jobs combined, full page width ---
-      # Merges every job's history into one list sorted newest-first,
-      # capped at 25 rows total (not per job) - stays readable no
-      # matter how many jobs you have or how much history piles up.
-      # Each job's "History" diagnostic sensor must be enabled first
-      # (Settings > that job's device > History > gear icon) or its
-      # runs won't show up here. Timestamps are shown in your local
-      # timezone.
-      #
-      # Written to survive Home Assistant's own dashboard editor
-      # re-serialising this YAML (it rewrites `content: |` to
-      # `content: >`, which folds line breaks into spaces before
-      # Jinja ever runs) - every newline needed in the *output* is
-      # emitted explicitly via {{ "\n" }} rather than relying on a
-      # source line break surviving, and `run.get(...)` is used
-      # throughout instead of `run.xxx` so older history entries
-      # (recorded before a field existed) don't raise instead of
-      # just showing blank/"?".
-      - type: grid
-        column_span: 4
-        cards:
+          # --- Recent runs, ALL jobs combined, full row width ---
+          # Merges every job's history into one list sorted newest-first,
+          # capped at 25 rows total (not per job) - stays readable no
+          # matter how many jobs you have or how much history piles up.
+          # Each job's "History" diagnostic sensor must be enabled first
+          # (Settings > that job's device > History > gear icon) or its
+          # runs won't show up here. Timestamps are shown in your local
+          # timezone.
+          #
+          # Written to survive Home Assistant's own dashboard editor
+          # re-serialising this YAML (it rewrites `content: |` to
+          # `content: >`, which folds line breaks into spaces before
+          # Jinja ever runs) - every newline needed in the *output* is
+          # emitted explicitly via {{ "\n" }} rather than relying on a
+          # source line break surviving, and `run.get(...)` is used
+          # throughout instead of `run.xxx` so older history entries
+          # (recorded before a field existed) don't raise instead of
+          # just showing blank/"?".
           - type: markdown
             title: Recent runs (all jobs)
             grid_options:
@@ -156,11 +149,9 @@ views:
               {%- endfor -%}
               {%- endif -%}
 
-      # --- Trend graph + combined log, side by side, growing downward
-      # with content (rows: auto) rather than a fixed height ---
-      - type: grid
-        column_span: 2
-        cards:
+          # --- Trend graph + combined log, side by side, growing
+          # downward with content (rows: auto) rather than a fixed
+          # height ---
           - type: custom:auto-entities
             card:
               type: history-graph
@@ -171,12 +162,9 @@ views:
                 - integration: duplicati_monitor
                   entity_id: "*_total_backup_size"
             grid_options:
-              columns: full
+              columns: 6
               rows: auto
 
-      - type: grid
-        column_span: 2
-        cards:
           - type: custom:auto-entities
             card:
               type: logbook
@@ -187,5 +175,5 @@ views:
                 - integration: duplicati_monitor
                   entity_id: "*_status"
             grid_options:
-              columns: full
+              columns: 6
               rows: auto

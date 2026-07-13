@@ -1,17 +1,28 @@
-Rebalance dashboard top row 50/50 after live layout review
+Simplify dashboard to one section - multi-section layout wasn't behaving as documented
 
-andlo's live dashboard showed the top row split 25/75 (gauge+jobs vs
-the status list) rather than evenly, and the "Recent runs" table
-still wasn't using its full width despite the section/grid_options
-already being correct per Home Assistant's documented sizing rules -
-confirmed by pulling the live config back out unchanged.
+The two-section (then five-section) layout from the last two commits
+still showed an unexplained gap between adjacent sections and the
+"Recent runs" table stayed narrow even with `grid_options.columns:
+full` correctly set (confirmed via re-fetching the live config
+unchanged) - the config matched Home Assistant's documented sizing
+rules but the rendered result didn't match, per andlo's screenshots.
 
-Rebalanced the top row to a 50/50 column_span split (concrete,
-low-risk proportion change). Left the table-width issue itself
-unresolved for now and asked andlo to enable the dashboard-screenshot
-beta feature so it can be verified visually instead of guessed at
-further - config-level checks have confirmed the JSON is correct, so
-whatever's happening now is a rendering/CSS question that needs an
-actual screenshot to diagnose properly.
+Also clarified: the "dashboard screenshot" beta feature mentioned by
+the dashboard-editing tool isn't a Home Assistant setting the user can
+find/enable - it's tooling-side, not something exposed in HA's own
+UI. Shouldn't have suggested hunting for it there.
+
+Consolidated everything into a single `sections`-view section, sized
+entirely with per-card `grid_options.columns` on that one section's
+12-column grid (3+3+6=12 top row, "full" for the table, 6+6=12 for
+graph+logbook). This removes inter-section layout as a variable
+entirely, which was the one part of the previous structure I couldn't
+actually verify and that the documented rules didn't seem to predict
+correctly in practice.
+
+Applied directly to andlo's live dashboard via the Home Assistant
+config API and asked him to check the result, since no screenshot
+tooling is available for this instance - still can't fully close the
+loop on this one without his eyes on it.
 
 No custom_components/ changes - dashboard-only, no new release.
