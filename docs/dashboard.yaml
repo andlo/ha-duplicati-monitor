@@ -6,19 +6,23 @@
 # sends us its own URL, so there's no way to auto-discover it - fill
 # in the map once per server, skip it entirely if you don't want links.
 #
-# LAYOUT: a single `sections`-view section, everything sized with
-# per-card `grid_options.columns` on that ONE section's 12-column
-# grid (3+3+6=12 for the top row, "full" for the table, 6+6=12 for
-# graph+logbook). An earlier version split this across multiple
-# separate sections with `column_span`, which produced unexplained
-# gaps between sections and a "Recent runs" table that stayed narrow
-# despite `columns: full` being set correctly - andlo's live
-# screenshots showed this happening even though the config matched
-# Home Assistant's documented sizing rules. Consolidating into one
-# section removes inter-section layout as a variable entirely, which
-# is more than I could actually verify visually (no screenshot tooling
-# available for this instance) - tell me if it still doesn't look
-# right and we'll keep adjusting.
+# LAYOUT: plain `masonry` view (the original default) - each card gets
+# its own reasonably-sized column, auto-balanced by Home Assistant.
+#
+# We tried the newer `sections` view type to make "Recent runs" span
+# the full page width, expecting behaviour matching Home Assistant's
+# own documented sizing rules (grid_options.columns, column_span,
+# max_columns). In practice, on andlo's real dashboard, several
+# different correctly-configured attempts kept producing unexplained
+# results - gaps between sections, the whole page shrinking to a
+# narrow column, cards not filling their allotted width - that didn't
+# match the documentation, and without visual/screenshot access to
+# verify against, iterating on it stopped being productive and started
+# actively breaking things that had been working. Reverted to the
+# simpler, previously-stable masonry layout rather than keep guessing.
+# If you want to revisit a wider "Recent runs" table later, that's
+# still open - just needs someone who can actually see the dashboard
+# render to iterate on it directly.
 #
 # The four "Duplicati Total/OK/Problem/Health" summary entities always
 # have the same entity_id regardless of what you named the integration
@@ -50,132 +54,112 @@ views:
   - title: Duplicati
     path: duplicati
     icon: mdi:backup-restore
-    type: sections
-    max_columns: 4
-    sections:
-      - type: grid
-        column_span: 4
-        cards:
-          - type: gauge
-            entity: sensor.duplicati_health
-            name: Backup health
-            min: 0
-            max: 100
-            severity:
-              green: 80
-              yellow: 50
-              red: 0
-            grid_options:
-              columns: 3
+    cards:
+      - type: gauge
+        entity: sensor.duplicati_health
+        name: Backup health
+        min: 0
+        max: 100
+        severity:
+          green: 80
+          yellow: 50
+          red: 0
 
-          - type: glance
-            title: Jobs
-            show_state: true
-            entities:
-              - entity: sensor.duplicati_total
-                name: Total
-                icon: mdi:counter
-              - entity: sensor.duplicati_ok
-                name: OK
-                icon: mdi:check-circle
-              - entity: sensor.duplicati_problem
-                name: Problem
-                icon: mdi:alert-circle
-            grid_options:
-              columns: 3
+      - type: glance
+        title: Jobs
+        show_state: true
+        entities:
+          - entity: sensor.duplicati_total
+            name: Total
+            icon: mdi:counter
+          - entity: sensor.duplicati_ok
+            name: OK
+            icon: mdi:check-circle
+          - entity: sensor.duplicati_problem
+            name: Problem
+            icon: mdi:alert-circle
 
-          # --- One row per job ---
-          - type: custom:auto-entities
-            card:
-              type: entities
-              title: Backup jobs - status
-            filter:
-              include:
-                - integration: duplicati_monitor
-                  entity_id: "*_status"
-            sort:
-              method: friendly_name
-            grid_options:
-              columns: 6
+      # --- One row per job ---
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: Backup jobs - status
+        filter:
+          include:
+            - integration: duplicati_monitor
+              entity_id: "*_status"
+        sort:
+          method: friendly_name
 
-          # --- Recent runs, ALL jobs combined, full row width ---
-          # Merges every job's history into one list sorted newest-first,
-          # capped at 25 rows total (not per job) - stays readable no
-          # matter how many jobs you have or how much history piles up.
-          # Each job's "History" diagnostic sensor must be enabled first
-          # (Settings > that job's device > History > gear icon) or its
-          # runs won't show up here. Timestamps are shown in your local
-          # timezone.
-          #
-          # Written to survive Home Assistant's own dashboard editor
-          # re-serialising this YAML (it rewrites `content: |` to
-          # `content: >`, which folds line breaks into spaces before
-          # Jinja ever runs) - every newline needed in the *output* is
-          # emitted explicitly via {{ "\n" }} rather than relying on a
-          # source line break surviving, and `run.get(...)` is used
-          # throughout instead of `run.xxx` so older history entries
-          # (recorded before a field existed) don't raise instead of
-          # just showing blank/"?".
-          - type: markdown
-            title: Recent runs (all jobs)
-            grid_options:
-              columns: full
-            content: >
-              {%- set server_urls = {} -%}
-              {%- set history_entities =
-              integration_entities('duplicati_monitor') | select('match',
-              '.*_history$') | list -%}
-              {%- set all_runs = namespace(list=[]) -%}
-              {%- for entity_id in history_entities -%}
-              {%- for run in (state_attr(entity_id, 'runs') or []) -%}
-              {%- set all_runs.list = all_runs.list + [run] -%}
-              {%- endfor -%}
-              {%- endfor -%}
-              {%- set sorted_runs = all_runs.list |
-              sort(attribute='recorded_at', reverse=true) -%}
-              {%- if sorted_runs | length == 0 -%}
-              No runs recorded yet - enable at least one job's History
-              sensor under Settings > that job's device > History.
-              {%- else -%}
-              {{ "| Server | Job | When | Result | Files | W/E |" }}{{ "\n" }}{{ "|---|---|---|---|---|---|" }}{%- for run in sorted_runs[:25] -%}
-              {%- set ts = run.get('end_time') or run.get('recorded_at') -%}
-              {%- set when = as_local(as_datetime(ts)).strftime('%Y-%m-%d %H:%M')
-              if ts else 'unknown' -%}
-              {%- set sname = run.get('server_name') or run.get('server_id') or
-              "?" -%}
-              {%- set surl = server_urls.get(run.get('server_name')) or
-              server_urls.get(run.get('server_id')) -%}
-              {%- set scell = ("[" ~ sname ~ "](" ~ surl ~ ")") if surl else
-              sname -%}
-              {{ "\n" }}| {{ scell }} | {{ run.get('job_name') or run.get('job_id') or "?" }} | {{ when }} | {{ run.get('parsed_result') }} | {{ run.get('examined_files') }} | {{ run.get('warnings_count') }}/{{ run.get('errors_count') }} |
-              {%- endfor -%}
-              {%- endif -%}
+      # --- Every job's total size, on one graph ---
+      - type: custom:auto-entities
+        card:
+          type: history-graph
+          title: Total backup size over time
+          hours_to_show: 168
+        filter:
+          include:
+            - integration: duplicati_monitor
+              entity_id: "*_total_backup_size"
 
-          # --- Trend graph + combined log, side by side, growing
-          # downward with content (rows: auto) rather than a fixed
-          # height ---
-          - type: custom:auto-entities
-            card:
-              type: history-graph
-              title: Total backup size over time
-              hours_to_show: 168
-            filter:
-              include:
-                - integration: duplicati_monitor
-                  entity_id: "*_total_backup_size"
-            grid_options:
-              columns: 6
-              rows: auto
+      # --- Combined activity log, all jobs ---
+      - type: custom:auto-entities
+        card:
+          type: logbook
+          title: Recent activity (all jobs)
+          hours_to_show: 168
+        filter:
+          include:
+            - integration: duplicati_monitor
+              entity_id: "*_status"
 
-          - type: custom:auto-entities
-            card:
-              type: logbook
-              title: Recent activity (all jobs)
-              hours_to_show: 168
-            filter:
-              include:
-                - integration: duplicati_monitor
-                  entity_id: "*_status"
-            grid_options:
-              columns: 6
-              rows: auto
+      # --- Recent runs, ALL jobs combined into one table ---
+      # Merges every job's history into one list sorted newest-first,
+      # capped at 25 rows total (not per job) - stays readable no
+      # matter how many jobs you have or how much history piles up.
+      # Each job's "History" diagnostic sensor must be enabled first
+      # (Settings > that job's device > History > gear icon) or its
+      # runs won't show up here. Timestamps are shown in your local
+      # timezone.
+      #
+      # Written to survive Home Assistant's own dashboard editor
+      # re-serialising this YAML (it rewrites `content: |` to
+      # `content: >`, which folds line breaks into spaces before
+      # Jinja ever runs) - every newline needed in the *output* is
+      # emitted explicitly via {{ "\n" }} rather than relying on a
+      # source line break surviving, and `run.get(...)` is used
+      # throughout instead of `run.xxx` so older history entries
+      # (recorded before a field existed) don't raise instead of
+      # just showing blank/"?".
+      - type: markdown
+        title: Recent runs (all jobs)
+        content: >
+          {%- set server_urls = {} -%}
+          {%- set history_entities =
+          integration_entities('duplicati_monitor') | select('match',
+          '.*_history$') | list -%}
+          {%- set all_runs = namespace(list=[]) -%}
+          {%- for entity_id in history_entities -%}
+          {%- for run in (state_attr(entity_id, 'runs') or []) -%}
+          {%- set all_runs.list = all_runs.list + [run] -%}
+          {%- endfor -%}
+          {%- endfor -%}
+          {%- set sorted_runs = all_runs.list |
+          sort(attribute='recorded_at', reverse=true) -%}
+          {%- if sorted_runs | length == 0 -%}
+          No runs recorded yet - enable at least one job's History
+          sensor under Settings > that job's device > History.
+          {%- else -%}
+          {{ "| Server | Job | When | Result | Files | W/E |" }}{{ "\n" }}{{ "|---|---|---|---|---|---|" }}{%- for run in sorted_runs[:25] -%}
+          {%- set ts = run.get('end_time') or run.get('recorded_at') -%}
+          {%- set when = as_local(as_datetime(ts)).strftime('%Y-%m-%d %H:%M')
+          if ts else 'unknown' -%}
+          {%- set sname = run.get('server_name') or run.get('server_id') or
+          "?" -%}
+          {%- set surl = server_urls.get(run.get('server_name')) or
+          server_urls.get(run.get('server_id')) -%}
+          {%- set scell = ("[" ~ sname ~ "](" ~ surl ~ ")") if surl else
+          sname -%}
+          {{ "\n" }}| {{ scell }} | {{ run.get('job_name') or run.get('job_id') or "?" }} | {{ when }} | {{ run.get('parsed_result') }} | {{ run.get('examined_files') }} | {{ run.get('warnings_count') }}/{{ run.get('errors_count') }} |
+          {%- endfor -%}
+          {%- endif -%}

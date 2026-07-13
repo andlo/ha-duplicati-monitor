@@ -1,12 +1,27 @@
-Fix regression: missing max_columns/column_span made the whole dashboard narrow
+Revert dashboard to masonry - sections view kept regressing, not improving
 
-Simplifying to one section in the previous commit dropped the view's
-max_columns setting and never gave that lone section a column_span -
-without it, a section claims only one "slot" out of the up-to-4 the
-view could show side by side, and does NOT expand to fill the row
-just because there's nothing next to it. Result: the entire dashboard
-content was squeezed into roughly a quarter of the page width, per
-andlo's screenshot.
+Three consecutive attempts at a `sections`-view layout each produced
+results on andlo's real dashboard that contradicted Home Assistant's
+own documented sizing rules: unexplained gaps between sections, the
+"Recent runs" table staying narrow despite correctly-configured
+`grid_options.columns: full`, and finally the entire dashboard
+collapsing to a narrow left-aligned column even with
+`max_columns`/`column_span` explicitly set to claim the full row.
 
-Added max_columns: 4 at the view level and column_span: 4 on the
-section, so it explicitly claims the full row.
+Without any way to see the actual rendered result (no screenshot
+tooling available for this instance, and the config-level checks kept
+confirming the JSON matched intent), each fix was a guess informed by
+documentation that evidently didn't match how this actually rendered
+in practice - likely some interaction with the `custom:auto-entities`
+wrapper cards, though that's unconfirmed.
+
+Reverted to the plain `masonry` view (the original default, and what
+this dashboard used before any of this) - each card gets its own
+reasonably-sized column, auto-balanced by Home Assistant, no
+`grid_options`/`column_span`/`max_columns` involved at all. Gives up
+on "Recent runs" spanning extra width, but stops actively breaking
+things that had been fine. Documented in dashboard.yaml that revisiting
+a wider table layout needs someone who can actually see the dashboard
+render to iterate on it.
+
+No custom_components/ changes - dashboard-only, no new release.
