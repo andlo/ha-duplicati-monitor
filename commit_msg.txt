@@ -1,28 +1,12 @@
-Simplify dashboard to one section - multi-section layout wasn't behaving as documented
+Fix regression: missing max_columns/column_span made the whole dashboard narrow
 
-The two-section (then five-section) layout from the last two commits
-still showed an unexplained gap between adjacent sections and the
-"Recent runs" table stayed narrow even with `grid_options.columns:
-full` correctly set (confirmed via re-fetching the live config
-unchanged) - the config matched Home Assistant's documented sizing
-rules but the rendered result didn't match, per andlo's screenshots.
+Simplifying to one section in the previous commit dropped the view's
+max_columns setting and never gave that lone section a column_span -
+without it, a section claims only one "slot" out of the up-to-4 the
+view could show side by side, and does NOT expand to fill the row
+just because there's nothing next to it. Result: the entire dashboard
+content was squeezed into roughly a quarter of the page width, per
+andlo's screenshot.
 
-Also clarified: the "dashboard screenshot" beta feature mentioned by
-the dashboard-editing tool isn't a Home Assistant setting the user can
-find/enable - it's tooling-side, not something exposed in HA's own
-UI. Shouldn't have suggested hunting for it there.
-
-Consolidated everything into a single `sections`-view section, sized
-entirely with per-card `grid_options.columns` on that one section's
-12-column grid (3+3+6=12 top row, "full" for the table, 6+6=12 for
-graph+logbook). This removes inter-section layout as a variable
-entirely, which was the one part of the previous structure I couldn't
-actually verify and that the documented rules didn't seem to predict
-correctly in practice.
-
-Applied directly to andlo's live dashboard via the Home Assistant
-config API and asked him to check the result, since no screenshot
-tooling is available for this instance - still can't fully close the
-loop on this one without his eyes on it.
-
-No custom_components/ changes - dashboard-only, no new release.
+Added max_columns: 4 at the view level and column_span: 4 on the
+section, so it explicitly claims the full row.

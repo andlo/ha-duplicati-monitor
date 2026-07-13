@@ -51,8 +51,10 @@ views:
     path: duplicati
     icon: mdi:backup-restore
     type: sections
+    max_columns: 4
     sections:
       - type: grid
+        column_span: 4
         cards:
           - type: gauge
             entity: sensor.duplicati_health
