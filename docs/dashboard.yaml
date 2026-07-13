@@ -6,23 +6,33 @@
 # sends us its own URL, so there's no way to auto-discover it - fill
 # in the map once per server, skip it entirely if you don't want links.
 #
-# LAYOUT: plain `masonry` view (the original default) - each card gets
-# its own reasonably-sized column, auto-balanced by Home Assistant.
+# TWO VIEWS (tabs):
+# - "Duplicati": plain `masonry` layout - gauge, job counts, status
+#   list, size graph, activity log. Each card gets its own
+#   reasonably-sized column, auto-balanced by Home Assistant.
+# - "Recent runs": the combined run-history table, alone, in a `panel`
+#   view - a panel view forces its one card to fill the entire page,
+#   which is the simplest and most reliable way to get a full-width
+#   card in Home Assistant (no column/grid-span configuration to get
+#   right, unlike the `sections` view type - see the note below).
 #
-# We tried the newer `sections` view type to make "Recent runs" span
-# the full page width, expecting behaviour matching Home Assistant's
-# own documented sizing rules (grid_options.columns, column_span,
-# max_columns). In practice, on andlo's real dashboard, several
-# different correctly-configured attempts kept producing unexplained
-# results - gaps between sections, the whole page shrinking to a
-# narrow column, cards not filling their allotted width - that didn't
-# match the documentation, and without visual/screenshot access to
-# verify against, iterating on it stopped being productive and started
-# actively breaking things that had been working. Reverted to the
-# simpler, previously-stable masonry layout rather than keep guessing.
-# If you want to revisit a wider "Recent runs" table later, that's
-# still open - just needs someone who can actually see the dashboard
-# render to iterate on it directly.
+# TABLE STYLING: uses `card-mod` (install via HACS > Frontend) to
+# force the markdown-rendered <table> to actually fill its card's
+# width. This matters because Home Assistant's markdown card strips
+# `style` attributes from its own content for security - a raw
+# `<table style="width:100%">` inside the markdown itself gets
+# silently stripped, confirmed against multiple Home Assistant
+# community reports of the same issue. card-mod works around this by
+# injecting CSS from outside the sanitized content area.
+#
+# WHY A SEPARATE PANEL VIEW INSTEAD OF `sections` + grid_options:
+# several correctly-configured `sections`-view attempts (matching Home
+# Assistant's own documented sizing rules) produced results on a real
+# dashboard that didn't match the documentation - unexplained gaps
+# between sections, tables staying narrow despite `columns: full`,
+# the whole page collapsing to a narrow column. A dedicated `panel`
+# view sidesteps all of that: there's no column math, the one card in
+# it always fills the page, full stop.
 #
 # The four "Duplicati Total/OK/Problem/Health" summary entities always
 # have the same entity_id regardless of what you named the integration
@@ -33,7 +43,7 @@
 # your collector's device name.
 #
 # How to use:
-# 1. Install "auto-entities" via HACS > Frontend (search "auto-entities").
+# 1. Install "auto-entities" AND "card-mod" via HACS > Frontend.
 # 2. Settings > Dashboards > Add Dashboard > "New dashboard from scratch",
 #    or edit an existing one. Switch to YAML mode (⋮ menu > Edit in YAML)
 #    and paste everything below.
@@ -113,26 +123,33 @@ views:
             - integration: duplicati_monitor
               entity_id: "*_status"
 
-      # --- Recent runs, ALL jobs combined into one table ---
-      # Merges every job's history into one list sorted newest-first,
-      # capped at 25 rows total (not per job) - stays readable no
-      # matter how many jobs you have or how much history piles up.
-      # Each job's "History" diagnostic sensor must be enabled first
-      # (Settings > that job's device > History > gear icon) or its
-      # runs won't show up here. Timestamps are shown in your local
-      # timezone.
-      #
-      # Written to survive Home Assistant's own dashboard editor
-      # re-serialising this YAML (it rewrites `content: |` to
-      # `content: >`, which folds line breaks into spaces before
-      # Jinja ever runs) - every newline needed in the *output* is
-      # emitted explicitly via {{ "\n" }} rather than relying on a
-      # source line break surviving, and `run.get(...)` is used
-      # throughout instead of `run.xxx` so older history entries
-      # (recorded before a field existed) don't raise instead of
-      # just showing blank/"?".
+  # --- Full-page table, all jobs combined, in its own tab ---
+  # Merges every job's history into one list sorted newest-first,
+  # capped at 25 rows total (not per job) - stays readable no matter
+  # how many jobs you have or how much history piles up. Each job's
+  # "History" diagnostic sensor must be enabled first (Settings >
+  # that job's device > History > gear icon) or its runs won't show
+  # up here. Timestamps are shown in your local timezone.
+  #
+  # Written to survive Home Assistant's own dashboard editor
+  # re-serialising this YAML (it rewrites `content: |` to
+  # `content: >`, which folds line breaks into spaces before Jinja
+  # ever runs) - every newline needed in the *output* is emitted
+  # explicitly via {{ "\n" }} rather than relying on a source line
+  # break surviving, and `run.get(...)` is used throughout instead of
+  # `run.xxx` so older history entries (recorded before a field
+  # existed) don't raise instead of just showing blank/"?".
+  - title: Recent runs
+    path: recent-runs
+    icon: mdi:table
+    type: panel
+    cards:
       - type: markdown
         title: Recent runs (all jobs)
+        card_mod:
+          style: >
+            table { width: 100%; table-layout: fixed; }
+            td, th { overflow: hidden; text-overflow: ellipsis; padding: 8px; }
         content: >
           {%- set server_urls = {} -%}
           {%- set history_entities =

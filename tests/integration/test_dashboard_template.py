@@ -9,16 +9,18 @@ from custom_components.duplicati_monitor.const import DOMAIN, CONF_WEBHOOK_ID
 
 
 def _find_markdown_card(dashboard: dict) -> dict:
-    """docs/dashboard.yaml uses a `sections`-type view (cards live
-    under view['sections'][i]['cards']), not the older flat
-    view['cards'] - search whichever shape is present."""
-    view = dashboard["views"][0]
-    card_lists = [view["cards"]] if "cards" in view else []
-    card_lists += [s["cards"] for s in view.get("sections", [])]
-    for cards in card_lists:
-        for card in cards:
-            if card.get("type") == "markdown":
-                return card
+    """docs/dashboard.yaml now spreads cards across multiple views
+    (a masonry main view plus a dedicated panel view for the table),
+    and/or a `sections`-type view (cards live under
+    view['sections'][i]['cards']) rather than the flat view['cards']
+    - search every view/shape rather than assuming views[0]."""
+    for view in dashboard["views"]:
+        card_lists = [view["cards"]] if "cards" in view else []
+        card_lists += [s["cards"] for s in view.get("sections", [])]
+        for cards in card_lists:
+            for card in cards:
+                if card.get("type") == "markdown":
+                    return card
     raise AssertionError("No markdown card found in docs/dashboard.yaml")
 
 
