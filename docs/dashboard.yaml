@@ -89,17 +89,43 @@ views:
             name: Problem
             icon: mdi:alert-circle
 
-      # --- One row per job ---
-      - type: custom:auto-entities
-        card:
-          type: entities
-          title: Backup jobs - status
-        filter:
-          include:
-            - integration: duplicati_monitor
-              entity_id: "*_status"
-        sort:
-          method: friendly_name
+      # --- One row per job, with last-run New/Modified data and Duration ---
+      # Matches each *_status entity to its sibling *_history sensor by
+      # entity_id suffix swap (*_status -> *_history) and reads the most
+      # recent run (runs[-1], since runs are stored oldest-first). A plain
+      # entities card can't show attributes nested inside a list, so this
+      # uses a markdown table, same approach as "Recent runs" below.
+      - type: markdown
+        title: Backup jobs - status
+        card_mod:
+          style: >
+            table { width: 100%; table-layout: fixed; }
+            td, th { overflow: hidden; text-overflow: ellipsis; padding: 8px; }
+        content: >
+          {%- set status_entities =
+          integration_entities('duplicati_monitor') | select('match',
+          '.*_status$') | list | sort -%}
+          {%- if status_entities | length == 0 -%}
+          No jobs found.
+          {%- else -%}
+          {{ "| Job | Status | New data | Modified data | Duration |" }}{{ "\n" }}{{ "|---|---|---|---|---|" }}{%- for se in status_entities -%}
+          {%- set he = se | replace('_status', '_history') -%}
+          {%- set runs = state_attr(he, 'runs') or [] -%}
+          {%- set last = runs[-1] if runs | length > 0 else None -%}
+          {%- set job_name = state_attr(se, 'job_name') or se -%}
+          {%- set status = states(se) -%}
+          {%- set newd = (last.get('size_of_added_files', 0) |
+          filesizeformat) if last else "-" -%}
+          {%- set modd = (last.get('size_of_modified_files', 0) |
+          filesizeformat) if last else "-" -%}
+          {%- set total = (last.get('duration_seconds', 0) | int) if last
+          else 0 -%}
+          {%- set dur = (('%dh %02dm' % (total // 3600, (total % 3600) //
+          60)) if total >= 3600 else ('%dm %02ds' % (total // 60, total %
+          60))) if last else "-" -%}
+          {{ "\n" }}| {{ job_name }} | {{ status }} | {{ newd }} | {{ modd }} | {{ dur }} |
+          {%- endfor -%}
+          {%- endif -%}
 
       # --- Every job's total size, on one graph ---
       - type: custom:auto-entities
@@ -167,7 +193,7 @@ views:
           No runs recorded yet - enable at least one job's History
           sensor under Settings > that job's device > History.
           {%- else -%}
-          {{ "| Server | Job | When | Result | Files | W/E |" }}{{ "\n" }}{{ "|---|---|---|---|---|---|" }}{%- for run in sorted_runs[:25] -%}
+          {{ "| Server | Job | When | Result | Files | New data | Modified data | Duration | W/E |" }}{{ "\n" }}{{ "|---|---|---|---|---|---|---|---|---|" }}{%- for run in sorted_runs[:25] -%}
           {%- set ts = run.get('end_time') or run.get('recorded_at') -%}
           {%- set when = as_local(as_datetime(ts)).strftime('%Y-%m-%d %H:%M')
           if ts else 'unknown' -%}
@@ -177,6 +203,10 @@ views:
           server_urls.get(run.get('server_id')) -%}
           {%- set scell = ("[" ~ sname ~ "](" ~ surl ~ ")") if surl else
           sname -%}
-          {{ "\n" }}| {{ scell }} | {{ run.get('job_name') or run.get('job_id') or "?" }} | {{ when }} | {{ run.get('parsed_result') }} | {{ run.get('examined_files') }} | {{ run.get('warnings_count') }}/{{ run.get('errors_count') }} |
+          {%- set total = run.get('duration_seconds', 0) | int -%}
+          {%- set dur = ('%dh %02dm' % (total // 3600, (total % 3600) //
+          60)) if total >= 3600 else ('%dm %02ds' % (total // 60, total %
+          60)) -%}
+          {{ "\n" }}| {{ scell }} | {{ run.get('job_name') or run.get('job_id') or "?" }} | {{ when }} | {{ run.get('parsed_result') }} | {{ run.get('examined_files') }} | {{ run.get('size_of_added_files', 0) | filesizeformat }} | {{ run.get('size_of_modified_files', 0) | filesizeformat }} | {{ dur }} | {{ run.get('warnings_count') }}/{{ run.get('errors_count') }} |
           {%- endfor -%}
           {%- endif -%}

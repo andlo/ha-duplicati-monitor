@@ -1,21 +1,10 @@
-v0.3.6: allow permanently deleting a job's device (closes issue #3)
+docs: add New data, Modified data, Duration columns to dashboard
 
-andlo asked how to remove a retired test job ("fedora - TEST") -
-turned out there was no way to do it. Deleting the device via
-Settings > Devices & Services alone doesn't help: since v0.2.0
-persists every known job so entities survive restarts, the device
-would just come back on the next restart or next report.
-
-Added async_remove_config_entry_device - the official Home Assistant
-hook for exactly this (multi-device integrations letting users remove
-individual devices via the UI's trash icon). Purges the job from our
-own storage (jobs + history) before returning True to let HA proceed
-with the actual removal, so "delete device" now actually means delete.
-
-Documented in a new README section, since silently-reappearing devices
-after a "successful" deletion would be a confusing failure mode
-otherwise.
-
-Covered by a new test: create a job, delete its device through the
-same hook HA calls, simulate a restart, assert it doesn't come back
-and the sensor is genuinely gone.
+- "Recent runs" table: added New data / Modified data (filesizeformat)
+  and Duration columns between Files and W/E.
+- "Backup jobs - status" card: converted from an auto-entities
+  entities card to a markdown table, since attributes nested inside
+  the history sensor's runs list aren't accessible from a plain
+  entities row. Shows each job's current status plus the last run's
+  New data, Modified data, and Duration, matched via the *_status ->
+  *_history entity_id suffix swap.
