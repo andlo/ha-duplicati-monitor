@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "duplicati_monitor"
-PLATFORMS = ["sensor", "binary_sensor"]
+PLATFORMS = ["sensor", "binary_sensor", "update"]
 
 CONF_WEBHOOK_ID = "webhook_id"
 
@@ -53,6 +53,33 @@ ATTR_VERSIONS = "versions"
 ATTR_BYTES_UPLOADED = "bytes_uploaded"
 ATTR_QUOTA_FREE = "destination_free_space"
 ATTR_LOG_LINES = "log_lines"
+
+# Duplicati's own version, as it puts it in every report it sends:
+# "2.4.0.0 (2.4.0.0_stable_2026-09-03)" - the short number first, the
+# full build string in parentheses. Present in BOTH wire formats (top
+# level "Version" in the native JSON, a "Version: ..." line in the
+# classic text report), so the update entity works either way.
+ATTR_DUPLICATI_VERSION = "duplicati_version"
+
+# ---------------------------------------------------------------------
+# Update entity: is a newer Duplicati out?
+#
+# Read from Duplicati's OWN update manifest - the same file its
+# built-in update check uses - rather than GitHub releases, so the
+# answer matches what Duplicati itself would offer you, per channel,
+# and doesn't depend on GitHub's unauthenticated rate limit.
+#
+# Wire format: one line `//SIGJSONv1: <base64 signature>`, then the
+# JSON body. We only read the body; we are not verifying the signature
+# (we install nothing - this entity is informational).
+# ---------------------------------------------------------------------
+UPDATE_MANIFEST_URL = "https://updates.duplicati.com/{channel}/latest-v2.manifest"
+UPDATE_MANIFEST_SIG_PREFIX = "//SIGJSONv1:"
+UPDATE_DEFAULT_CHANNEL = "stable"
+# Duplicati ships a few times a year; twice a day is already generous.
+UPDATE_SCAN_INTERVAL_HOURS = 12
+# HA truncates release_summary at 255 chars.
+UPDATE_SUMMARY_MAX_CHARS = 255
 
 # Run-history storage (issue #1): how many past runs to keep per job,
 # for the "history" sensor a dashboard can drill into.

@@ -28,6 +28,7 @@ try:
         ATTR_BEGIN_TIME,
         ATTR_BYTES_UPLOADED,
         ATTR_DELETED_FILES,
+        ATTR_DUPLICATI_VERSION,
         ATTR_DURATION_SECONDS,
         ATTR_END_TIME,
         ATTR_ERRORS_COUNT,
@@ -59,6 +60,7 @@ except ImportError:
     ATTR_BEGIN_TIME,
     ATTR_BYTES_UPLOADED,
     ATTR_DELETED_FILES,
+    ATTR_DUPLICATI_VERSION,
     ATTR_DURATION_SECONDS,
     ATTR_END_TIME,
     ATTR_ERRORS_COUNT,
@@ -113,6 +115,7 @@ PAYLOAD_SCHEMA = vol.Schema(
         vol.Optional(ATTR_BYTES_UPLOADED): vol.Coerce(int),
         vol.Optional(ATTR_QUOTA_FREE): vol.Coerce(int),
         vol.Optional(ATTR_LOG_LINES): list,
+        vol.Optional(ATTR_DUPLICATI_VERSION): vol.Any(str, None),
     },
     extra=vol.ALLOW_EXTRA,
 )
@@ -323,6 +326,16 @@ def translate_native_payload(data: dict, query: dict) -> dict:
             data, ("Data", "BackendStatistics", "FreeQuotaSpace")
         ),
         ATTR_LOG_LINES: _dig(data, ("Data", "LogLines"), ("LogLines",)),
+        # Duplicati stamps its own version into every result block it
+        # produces ("2.4.0.0 (2.4.0.0_stable_2026-09-03)"); take the
+        # first one present so the update entity has something to
+        # compare against the release manifest.
+        ATTR_DUPLICATI_VERSION: _dig(
+            data,
+            ("Data", "Version"),
+            ("Version",),
+            ("Data", "BackendStatistics", "Version"),
+        ),
     }
 
 
@@ -394,6 +407,10 @@ _CLASSIC_FIELD_MAP = {
     "KnownFilesets": ATTR_VERSIONS,
     "BytesUploaded": ATTR_BYTES_UPLOADED,
     "FreeQuotaSpace": ATTR_QUOTA_FREE,
+    # The classic text report carries the version too, as a plain
+    # "Version: 2.4.0.0 (2.4.0.0_stable_2026-09-03)" line - so the
+    # update entity works without switching to the JSON format.
+    "Version": ATTR_DUPLICATI_VERSION,
 }
 
 
