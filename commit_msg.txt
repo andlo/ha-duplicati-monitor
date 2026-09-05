@@ -1,10 +1,5 @@
-docs: add New data, Modified data, Duration columns to dashboard
+v0.3.7: add update entity per reporting Duplicati server (#5)
 
-- "Recent runs" table: added New data / Modified data (filesizeformat)
-  and Duration columns between Files and W/E.
-- "Backup jobs - status" card: converted from an auto-entities
-  entities card to a markdown table, since attributes nested inside
-  the history sensor's runs list aren't accessible from a plain
-  entities row. Shows each job's current status plus the last run's
-  New data, Modified data, and Duration, matched via the *_status ->
-  *_history entity_id suffix swap.
+Thanks to @Stalker-4x4 for the contribution. Adds an update entity per
+reporting server, comparing the installed version parsed from the
+Duplicati report against Duplicati's own release manifest.
