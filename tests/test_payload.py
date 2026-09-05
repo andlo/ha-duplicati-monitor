@@ -256,3 +256,55 @@ def test_compute_next_expected_daily_cadence():
     next_expected, interval = compute_next_expected(runs)
     assert interval == 86400.0  # 24h
     assert next_expected == "2026-01-04T03:00:00+00:00"
+
+
+def test_native_payload_carries_duplicati_version():
+    """Duplicati stamps its own version into the native JSON report.
+    That is where the update entity gets its installed version, so it
+    has to survive translation into the contract."""
+    native = {
+        "Data": {
+            "ParsedResult": "Success",
+            "Version": "2.4.0.0 (2.4.0.0_stable_2026-09-03)",
+            "ExaminedFiles": 3,
+        },
+        "Extra": {"backup-name": "documents", "machine-name": "nas01"},
+    }
+    report = parse_incoming(native, {"server_id": "nas01"})
+    assert report.raw["duplicati_version"] == "2.4.0.0 (2.4.0.0_stable_2026-09-03)"
+
+
+def test_native_payload_version_falls_back_to_backend_statistics():
+    """Some result blocks carry the version only under
+    BackendStatistics - take whichever is present."""
+    native = {
+        "Data": {
+            "ParsedResult": "Success",
+            "BackendStatistics": {"Version": "2.3.0.4 (2.3.0.4_stable_2026-07-09)"},
+        },
+        "Extra": {"backup-name": "documents"},
+    }
+    report = parse_incoming(native, {"server_id": "nas01"})
+    assert report.raw["duplicati_version"] == "2.3.0.4 (2.3.0.4_stable_2026-07-09)"
+
+
+def test_classic_message_carries_duplicati_version():
+    """The classic plain-text report carries the version too, as a
+    "Version:" line, so the update entity works without switching a
+    machine over to the JSON format."""
+    raw_body = (
+        "message=Duplicati%20Backup%20report%20for%20TEST%20"
+        "%28abc123%2C%20DB-1%2C%20myhostname%29"
+        "%0A%0AExaminedFiles%3A%2010%0AParsedResult%3A%20Success"
+        "%0AVersion%3A%202.4.0.0%20%282.4.0.0_stable_2026-09-03%29"
+    )
+    report = parse_raw_body(raw_body, {"server_id": "nas01"})
+    assert report.raw["duplicati_version"] == "2.4.0.0 (2.4.0.0_stable_2026-09-03)"
+
+
+def test_payload_without_version_is_still_accepted():
+    """Older Duplicati builds may not report a version at all - that
+    must not reject the payload, the update entity just stays
+    unavailable for that server."""
+    report = parse_payload({"server_id": "nas01", "job_id": "documents"})
+    assert report.raw.get("duplicati_version") is None

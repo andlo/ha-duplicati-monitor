@@ -155,6 +155,40 @@ The `total_backup_size`/`versions`/`uploaded_bytes`/
 that the classic plain-text format (`--send-http-url`) doesn't include.
 Everything else works with either format.
 
+## Duplicati version and updates
+
+The collector device also carries one **update entity per reporting
+machine**, `update.duplicati_<server>` - the same kind of "a newer
+version is out" entity Immich, Nextcloud, Pi-hole and friends expose:
+
+- **installed version** comes out of Duplicati's own report. It stamps
+  its version into every report it sends (`"2.4.0.0
+  (2.4.0.0_stable_2026-09-03)"`), in *both* wire formats - top-level
+  `Version` in the native JSON, a `Version:` line in the classic text
+  report - so this needs no extra configuration and, like the rest of
+  this integration, no access to Duplicati's web UI or API. The full
+  build string is kept in the `installed_build` attribute; the entity
+  itself compares the bare `2.4.0.0` part.
+- **latest version** comes from Duplicati's own release manifest
+  (`https://updates.duplicati.com/<channel>/latest-v2.manifest`) - the
+  same file Duplicati's built-in update check reads. Deliberately not
+  GitHub releases: the manifest is per release channel, so a machine
+  tracking `beta` is not told to "update" to a stable build it would
+  never install, and there is no unauthenticated rate limit to trip
+  over. Fetched twice a day; a failed fetch just leaves the entity
+  reporting the installed version, it never blocks setup.
+
+Attributes: `installed_build`, `release_channel`, `release_time`,
+`release_name`, `server_id`. `release_summary` carries the release
+notes, `release_url` points at the download page for that channel.
+
+Home Assistant cannot install a Duplicati update, so the entity
+deliberately offers no install button - it is informational, and an
+automation on it turning `on` is the point.
+
+The entity appears once that machine has reported at least one run,
+since that is where the installed version comes from.
+
 ## Removing a retired job
 
 Jobs are remembered permanently (so entities survive Home Assistant
